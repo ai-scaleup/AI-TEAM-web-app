@@ -65,6 +65,24 @@ const agents = [
     image: "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
     href: "/dashboard/daniele-ai",
   },
+  {
+    name: "Test Mike AI",
+    role: "Test Marketing Director",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
+    href: "/dashboard/test-mike-ai",
+  },
+  {
+    name: "Test Alex AI",
+    role: "Test ADs Manager",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png",
+    href: "/dashboard/test-alex-ai",
+  },
+  {
+    name: "Test Tony AI",
+    role: "Test Sales Director",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
+    href: "/dashboard/test-tony-ai",
+  },
 ]
 
 export default async function HomePage() {
