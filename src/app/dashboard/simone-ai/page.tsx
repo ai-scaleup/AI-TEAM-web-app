@@ -647,244 +647,261 @@ export default function SimoneAI() {
                 className="simone-scrollbar"
                 style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}
               >
-                <Link
-                  href="/dashboard/tony-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                {/* Converting Link components to anchor tags with target="_blank" */}
+                <div className="agents-list">
+                  <a
+                    href="/dashboard/tony-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
-                      alt="Tony"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Tony AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/aladino-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
+                        alt="Tony"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Tony AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/aladino-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
-                      alt="Aladino"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Aladdin AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/lara-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
+                        alt="Aladino"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Aladdin AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/lara-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
-                      alt="Lara"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Lara AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/simone-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
+                        alt="Lara"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Lara AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/simone-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png"
-                      alt="Simone"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Simone AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/mike-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png"
+                        alt="Simone"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Simone AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/mike-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png"
-                      alt="Mike"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Mike AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/daniele-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png"
+                        alt="Mike"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Mike AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/daniele-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2024/11/Gary-AI-SMMg-icon.png"
-                      alt="Daniele"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Daniele AI</span>
-                </Link>
-                <Link
-                  href="/dashboard/alex-ai"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                >
-                  <div
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2024/11/Gary-AI-SMMg-icon.png"
+                        alt="Daniele"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Daniele AI</span>
+                  </a>
+                  <a
+                    href="/dashboard/alex-ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: "#f8fafc",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      overflow: "hidden",
-                      flexShrink: 0,
+                      gap: "12px",
+                      padding: "10px 12px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#475569",
+                      transition: "background-color 0.2s ease",
                     }}
                   >
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png"
-                      alt="Alex"
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>Alex AI</span>
-                </Link>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "#f8fafc",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <img
+                        src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png"
+                        alt="Alex"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
+                    <span style={{ fontSize: "14px", fontWeight: 500 }}>Alex AI</span>
+                  </a>
+                </div>
               </div>
             </div>
           </div>

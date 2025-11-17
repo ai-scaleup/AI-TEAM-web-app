@@ -635,8 +635,11 @@ export default function JimAIPage() {
                 AGENTI AI:
               </h3>
               <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <Link
+                {/* Converting Link components to anchor tags with target="_blank" */}
+                <a
                   href="/dashboard/tony-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -669,9 +672,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Tony AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/aladino-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -704,9 +709,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Aladino AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/lara-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -739,9 +746,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Lara AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/simone-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -774,9 +783,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Simone AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/mike-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -809,9 +820,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Mike AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/valentina-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -844,9 +857,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Valentina AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/niko-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -879,9 +894,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Niko AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/daniele-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -914,9 +931,11 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Daniele AI</span>
-                </Link>
-                <Link
+                </a>
+                <a
                   href="/dashboard/alex-ai"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -949,7 +968,7 @@ export default function JimAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>Alex AI</span>
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -1301,7 +1320,7 @@ export default function JimAIPage() {
             padding: 16px !important;
           }
 
-          div[style*="maxWidth: '90%'"] {
+          div[style*="max-width: '90%'"] {
             max-width: 100% !important;
           }
         }

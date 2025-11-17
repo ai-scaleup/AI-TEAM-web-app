@@ -721,9 +721,11 @@ export default function TonyAIPage() {
                     link: "/dashboard/alex-ai",
                   },
                 ].map((agent) => (
-                  <Link
+                  <a
                     key={agent.name}
                     href={agent.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -757,7 +759,7 @@ export default function TonyAIPage() {
                       />
                     </div>
                     <span style={{ fontSize: "14px", fontWeight: 500 }}>{agent.name}</span>
-                  </Link>
+                  </a>
                 ))}
               </div>
             </div>

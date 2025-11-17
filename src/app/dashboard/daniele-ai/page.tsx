@@ -811,9 +811,11 @@ export default function DanieleAIPage() {
                   href: "/dashboard/daniele-ai",
                 },
               ].map((agent) => (
-                <Link
+                <a
                   key={agent.name}
                   href={agent.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -843,7 +845,7 @@ export default function DanieleAIPage() {
                     />
                   </div>
                   <span style={{ fontSize: "14px", fontWeight: 500 }}>{agent.name}</span>
-                </Link>
+                </a>
               ))}
             </div>
           </div>
