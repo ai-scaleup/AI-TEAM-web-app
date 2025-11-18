@@ -13,10 +13,9 @@ export default function GiuliaWidget() {
   const chatInputRef = useRef<HTMLInputElement>(null)
   const chatMessagesRef = useRef<HTMLDivElement>(null)
 
-  // ——— helpers copied from your script ———
   const sanitizeText = (text: string) =>
     text
-      .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, "") // remove invisible chars
+      .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, "")
       .replace(/[^\S\r\n]+/g, " ")
       .replace(/\s{2,}/g, " ")
       .trim()
@@ -58,7 +57,6 @@ export default function GiuliaWidget() {
     chatWindowRef.current.classList.toggle("open", open)
   }
 
-  // ——— send logic converted to React ———
   const sendMessage = async () => {
     const input = chatInputRef.current
     const messages = chatMessagesRef.current
@@ -90,7 +88,6 @@ export default function GiuliaWidget() {
       })
 
       const textData = await res.text()
-      // console.log('Giulia raw response:', textData);
 
       const extracted: string[] = []
       try {
@@ -124,9 +121,7 @@ export default function GiuliaWidget() {
     }
   }
 
-  // Wire up listeners
   useEffect(() => {
-    // Add welcome message when component mounts (will show when user opens chat)
     addMessage("Ciao 👋 Sono Giulia, la tua AI Team Tutor! Come posso aiutarti?", "ai")
 
     const bubble = chatBubbleRef.current
@@ -158,7 +153,6 @@ export default function GiuliaWidget() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Render the widget DOM
   return (
     <>
       <div className="giulia-widget-container">
@@ -193,7 +187,6 @@ export default function GiuliaWidget() {
       </div>
 
       <style jsx>{`
-        /* All styles are now scoped to .giulia-widget-container */
         .giulia-widget-container {
           font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           -webkit-font-smoothing: antialiased;
@@ -201,10 +194,9 @@ export default function GiuliaWidget() {
           line-height: 1.5;
         }
 
-        /* Floating bubble */
         .giulia-chat-bubble {
           position: fixed;
-          bottom: 25px;
+          bottom: 65px;
           right: 25px;
           width: 60px;
           height: 60px;
@@ -231,14 +223,13 @@ export default function GiuliaWidget() {
           background: #fff;
         }
 
-        /* Chat window */
         .giulia-chat-window {
           position: fixed;
-          bottom: 100px;
+          bottom: 140px;
           right: 25px;
           width: 400px;
           height: 600px;
-          max-height: calc(100vh - 120px);
+          max-height: calc(100vh - 140px);
           background: #fff;
           border: 1px solid #e2e8f0;
           border-radius: 12px;
