@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useUser } from "@clerk/nextjs"
+import { useUser, UserButton } from "@clerk/nextjs"
 
 /* ---------------------------- API base URL ---------------------------- */
 
@@ -298,6 +298,16 @@ export default function HomePage() {
       <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8 lg:py-10">
         {/* Header Section */}
         <header className="relative mb-8 rounded-lg bg-[#235E84] px-4 py-6 text-center shadow-sm sm:mb-10 sm:rounded-xl sm:px-6 sm:py-8 md:mb-12 md:px-8 md:py-10 lg:px-10">
+          <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
+            <UserButton 
+              appearance={{
+                elements: {
+                  avatarBox: "h-10 w-10 sm:h-12 sm:w-12"
+                }
+              }}
+            />
+          </div>
+          
           <h1 className="mb-2 font-sans text-2xl font-bold leading-tight text-white sm:text-3xl md:text-4xl lg:text-[36px]">
             Incontra i tuoi Specialisti AI
           </h1>
