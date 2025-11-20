@@ -3,29 +3,34 @@
 import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
-import { UserButton } from "@clerk/nextjs"
 import Link from "next/link"
-import { Home } from 'lucide-react'
-import { marked } from 'marked'
+import { UserButton } from "@clerk/nextjs"
+import { Home } from "lucide-react"
+import { marked } from "marked"
 
-export default function AladinoAI() {
-  const [messages, setMessages] = useState<Array<{ text: string; sender: "ai" | "user"; time: string; raw?: string }>>([
-    {
-      text: "Ciao, sono Aladdin AI. Consulente virtuale per la creazione di nuovi servizi e prodotti ad alta marginalità. Come posso supportarti oggi?",
-      sender: "ai",
-      time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
-    },
-  ])
-  const [inputValue, setInputValue] = useState("")
+interface Message {
+  text: string
+  sender: "ai" | "user"
+  time: string
+}
+
+interface Chat {
+  messages: Message[]
+  lastUpdated: string
+  title: string
+}
+
+export default function AladinoAIPage() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [chats, setChats] = useState<{ [key: string]: Chat }>({})
+  const [currentChatId, setCurrentChatId] = useState("default")
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [useMemory, setUseMemory] = useState(true)
-  const [chats, setChats] = useState<Record<string, any>>({})
-  const [currentChatId, setCurrentChatId] = useState("default")
-
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const CURRENT_NAMESPACE = useRef<string>("")
+  const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
     "https://n8n-c2lq.onrender.com/webhook/f3ee3b1a-b98b-4108-9381-dc34e7d34518/chat?action=sendMessage"
@@ -39,51 +44,60 @@ export default function AladinoAI() {
       })
     }
 
-    let namespace = localStorage.getItem("Namespace")
-    if (!namespace) {
-      namespace = generateUUID()
-      localStorage.setItem("Namespace", namespace)
+    let ns = localStorage.getItem("Namespace")
+    if (!ns) {
+      ns = generateUUID()
+      localStorage.setItem("Namespace", ns)
     }
-    CURRENT_NAMESPACE.current = namespace
+    CURRENT_NAMESPACE.current = ns
 
-    const savedSidebarState = localStorage.getItem("aladino-ai-sidebar-visible")
-    if (savedSidebarState !== null) {
-      setSidebarVisible(savedSidebarState === "true")
-    }
-
-    const savedMemoryState = localStorage.getItem("aladino-ai-use-memory")
-    if (savedMemoryState !== null) {
-      setUseMemory(savedMemoryState !== "false")
-    }
-
-    const savedChats = localStorage.getItem("aladino-ai-chats")
-    if (savedChats) {
-      const parsedChats = JSON.parse(savedChats)
+    const storedChats = localStorage.getItem("aladino-ai-chats")
+    if (storedChats) {
+      const parsedChats = JSON.parse(storedChats)
       setChats(parsedChats)
 
-      if (Object.keys(parsedChats).length > 0) {
-        const sorted = Object.entries(parsedChats).sort(
-          ([, a]: any, [, b]: any) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
-        )
-        const mostRecentId = sorted[0][0]
-        setCurrentChatId(mostRecentId)
-        setMessages(parsedChats[mostRecentId].messages || [])
+      const sortedChats = (Object.entries(parsedChats) as [string, Chat][]).sort(
+        ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
+      )
+
+      if (sortedChats.length > 0) {
+        const [chatId, chat] = sortedChats[0]
+        setCurrentChatId(chatId)
+        setMessages(chat.messages || [])
+      } else {
+        createInitialMessage()
       }
+    } else {
+      createInitialMessage()
     }
+
+    const storedMemory = localStorage.getItem("aladino-ai-use-memory")
+    setUseMemory(storedMemory !== "false")
+
+    const storedSidebarVisible = localStorage.getItem("aladino-ai-sidebar-visible")
+    setSidebarVisible(storedSidebarVisible !== "false")
   }, [])
+
+  const createInitialMessage = () => {
+    const initialMessage: Message = {
+      text: "Ciao, sono Aladdin AI. Consulente virtuale per la creazione di nuovi servizi e prodotti ad alta marginalità. Come posso supportarti oggi?",
+      sender: "ai",
+      time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+    }
+    setMessages([initialMessage])
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + "px"
+    if (messages.length > 0) {
+      saveCurrentChat()
     }
-  }, [inputValue])
+  }, [messages])
 
-  const saveChat = (newTitle?: string) => {
+  const saveCurrentChat = (newTitle?: string) => {
     if (messages.length === 0) return
 
     let title = newTitle || chats[currentChatId]?.title || "Nuova Conversazione"
@@ -107,27 +121,14 @@ export default function AladinoAI() {
     localStorage.setItem("aladino-ai-chats", JSON.stringify(updatedChats))
   }
 
-  const createNewChat = () => {
-    const newChatId = "chat_" + Date.now()
-    setCurrentChatId(newChatId)
-    localStorage.setItem("aladino-ai-session-id", newChatId)
-    setMessages([
-      {
-        text: "Ciao, sono Aladdin AI. Consulente virtuale per la creazione di nuovi servizi e prodotti ad alta marginalità. Come posso supportarti oggi?",
-        sender: "ai",
-        time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
-      },
-    ])
-  }
-
   const loadChat = (chatId: string) => {
     setCurrentChatId(chatId)
     const chat = chats[chatId]
     setMessages(chat.messages || [])
   }
 
-  const deleteChat = (chatId: string, event: React.MouseEvent) => {
-    event.stopPropagation()
+  const deleteChat = (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
     if (!confirm("Sei sicuro di voler eliminare questa conversazione?")) return
 
     const updatedChats = { ...chats }
@@ -145,18 +146,25 @@ export default function AladinoAI() {
     }
   }
 
+  const createNewChat = () => {
+    const newChatId = "chat_" + Date.now()
+    setCurrentChatId(newChatId)
+    localStorage.setItem("aladino-ai-session-id", newChatId)
+    createInitialMessage()
+  }
+
   const formatMessageText = (text: string) => {
-    if (!text) return ''
+    if (!text) return ""
 
     // Detect if text contains a markdown table
     const hasTable = /\|.*\|.*\n\s*\|[\s\-:]+\|/m.test(text)
 
     if (hasTable) {
-      // Use marked for table rendering - Only valid options for current version
+      // Use marked for table rendering
       try {
         marked.setOptions({
           gfm: true,
-          breaks: true
+          breaks: true,
         })
         return marked.parse(text) as string
       } catch (e) {
@@ -173,7 +181,7 @@ export default function AladinoAI() {
       '<code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>',
     )
     formatted = formatted.replace(
-      /\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)/g,
+      /\[([^\]]+?)\]$$(https?:\/\/[^\s)]+)$$/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #235E84; text-decoration: underline;">$1</a>',
     )
     formatted = formatted.replace(/\n/g, "<br>")
@@ -181,23 +189,26 @@ export default function AladinoAI() {
   }
 
   const sendMessage = async () => {
-    if (!inputValue.trim()) return
+    if (!input.trim() || isLoading) return
 
-    const userMessage = {
-      text: inputValue,
-      sender: "user" as const,
+    const userMessage: Message = {
+      text: input.trim(),
+      sender: "user",
       time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
+    setInput("")
     setIsLoading(true)
 
-    const thinkingMessage = {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"
+    }
+
+    const thinkingMessage: Message = {
       text: "...",
-      sender: "ai" as const,
+      sender: "ai",
       time: "",
-      raw: "",
     }
     setMessages((prev) => [...prev, thinkingMessage])
 
@@ -212,67 +223,48 @@ export default function AladinoAI() {
           Accept: "text/event-stream",
         },
         body: JSON.stringify({
-          chatInput: inputValue,
+          chatInput: userMessage.text,
           sessionId: sessionId,
           useMemory: useMemory,
-          metadata: {
-            namespace: CURRENT_NAMESPACE.current,
-            source: "aladino-ai-chat",
-          },
+          metadata: { namespace: CURRENT_NAMESPACE.current, source: "aladino-ai-chat" },
         }),
       })
 
       if (!response.ok) throw new Error("HTTP error " + response.status)
 
       const reader = response.body?.getReader()
-      if (!reader) throw new Error("No reader available")
-
       const decoder = new TextDecoder("utf-8")
       let buffer = ""
       let rawText = ""
       let streamMode: "sse" | "jsonl" | null = null
-      let isFirstChunk = true
       let generatedTitle: string | null = null
 
       const handleEvent = (jsonStr: string) => {
-        let obj
         try {
-          obj = JSON.parse(jsonStr)
-        } catch {
-          return
-        }
-
-        if (obj.type === "item" && typeof obj.content === "string") {
-          if (isFirstChunk) {
-            setMessages((prev) => {
-              const newMessages = [...prev]
-              newMessages[newMessages.length - 1] = {
-                text: obj.content,
-                sender: "ai",
-                time: "",
-                raw: obj.content,
-              }
-              return newMessages
-            })
-            isFirstChunk = false
-          } else {
+          const obj = JSON.parse(jsonStr)
+          if (obj.type === "item" && typeof obj.content === "string") {
             rawText += obj.content
             setMessages((prev) => {
               const newMessages = [...prev]
-              newMessages[newMessages.length - 1] = {
-                ...newMessages[newMessages.length - 1],
-                text: rawText,
-                raw: rawText,
+              const lastMsg = newMessages[newMessages.length - 1]
+              if (lastMsg && lastMsg.sender === "ai") {
+                lastMsg.text = rawText
+                lastMsg.time = new Date().toLocaleTimeString("it-IT", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
               }
               return newMessages
             })
+          } else if (obj.type === "end" && obj.title) {
+            generatedTitle = obj.title
           }
-        } else if (obj.type === "end" && obj.title) {
-          generatedTitle = obj.title
+        } catch (e) {
+          // Ignore parse errors
         }
       }
 
-      while (true) {
+      while (reader) {
         const { value, done } = await reader.read()
         if (done) break
 
@@ -291,12 +283,13 @@ export default function AladinoAI() {
             const eventBlock = buffer.slice(0, idx)
             buffer = buffer.slice(idx + 2)
             const dataLines = eventBlock.split("\n").filter((l) => l.startsWith("data:"))
-            if (!dataLines.length) continue
-            const jsonStr = dataLines
-              .map((l) => l.replace(/^data:\s?/, ""))
-              .join("\n")
-              .trim()
-            if (jsonStr) handleEvent(jsonStr)
+            if (dataLines.length) {
+              const jsonStr = dataLines
+                .map((l) => l.replace(/^data:\s?/, ""))
+                .join("\n")
+                .trim()
+              if (jsonStr) handleEvent(jsonStr)
+            }
           }
         } else {
           const lines = buffer.split(/\r?\n/)
@@ -326,24 +319,31 @@ export default function AladinoAI() {
 
       setMessages((prev) => {
         const newMessages = [...prev]
-        const lastMessage = newMessages[newMessages.length - 1]
-        if (!lastMessage.raw) {
-          lastMessage.text = "Mi dispiace, non ho ricevuto una risposta valida. Riprova per favore."
-          lastMessage.raw = lastMessage.text
+        const lastMsg = newMessages[newMessages.length - 1]
+        if (lastMsg && lastMsg.sender === "ai" && lastMsg.text === "...") {
+          lastMsg.text = "Mi dispiace, non ho ricevuto una risposta valida. Riprova per favore."
+          lastMsg.time = new Date().toLocaleTimeString("it-IT", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         }
-        lastMessage.time = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
         return newMessages
       })
 
-      saveChat(generatedTitle || undefined)
+      if (generatedTitle) {
+        saveCurrentChat(generatedTitle)
+      }
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Error sending message:", error)
       setMessages((prev) => {
         const newMessages = [...prev]
-        newMessages[newMessages.length - 1] = {
-          text: "Errore di connessione. Riprova più tardi.",
-          sender: "ai",
-          time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+        const lastMsg = newMessages[newMessages.length - 1]
+        if (lastMsg && lastMsg.sender === "ai") {
+          lastMsg.text = "Errore di connessione. Riprova più tardi."
+          lastMsg.time = new Date().toLocaleTimeString("it-IT", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
         }
         return newMessages
       })
@@ -355,451 +355,51 @@ export default function AladinoAI() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
-      if (inputValue.trim() && !isLoading) {
-        sendMessage()
-      }
+      sendMessage()
     }
   }
 
-  const sortedChats = Object.entries(chats)
-    .sort(([, a]: any, [, b]: any) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
-    .slice(0, 50)
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    e.target.style.height = "auto"
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+  }
 
-  const monthNames = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+  const sortedChats = (Object.entries(chats) as [string, Chat][]).sort(
+    ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
+  )
 
   return (
     <>
       <style jsx global>{`
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-       
-        :root {
-          --background: #ffffff;
-          --foreground: #475569;
-          --card: #ffffff;
-          --card-foreground: #334155;
-          --primary: #235E84;
-          --primary-foreground: #ffffff;
-          --secondary: #E3F2FD;
-          --secondary-foreground: #235E84;
-          --muted: #f8fafc;
-          --muted-foreground: #64748b;
-          --accent: #235E84;
-          --sidebar: #ffffff;
-          --sidebar-foreground: #475569;
-          --sidebar-primary: #E3F2FD;
-          --sidebar-border: #e2e8f0;
-          --border: #e2e8f0;
-          --radius: 12px;
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
         }
-       
+
         body {
           font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: var(--background);
-          color: var(--foreground);
         }
-       
-        .aladino-container {
-          width: 100vw;
-          height: 100vh;
-          display: flex;
-          overflow: hidden;
-          background: var(--background);
+
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
         }
-       
-        .aladino-sidebar {
-          width: 320px;
-          min-width: 320px;
-          background: var(--sidebar);
-          border-right: 1px solid var(--sidebar-border);
-          display: flex;
-          flex-direction: column;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        ::-webkit-scrollbar-track {
+          background: #f1f5f9;
         }
-       
-        .aladino-sidebar.hidden {
-          width: 0;
-          min-width: 0;
-          overflow: hidden;
-          border-right: none;
-        }
-       
-        .aladino-sidebar-header {
-          padding: 20px;
-          border-bottom: 1px solid var(--sidebar-border);
-        }
-       
-        .aladino-brand-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 24px;
-        }
-       
-        .aladino-brand-section {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-       
-        .aladino-sidebar-close-btn {
-          display: none;
-          background: transparent;
-          border: none;
-          color: var(--sidebar-foreground);
-          width: 32px;
-          height: 32px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          align-items: center;
-          justify-content: center;
-          padding: 0;
-        }
-       
-        .aladino-sidebar-close-btn:hover {
-          background: var(--muted);
-          color: var(--primary);
-        }
-       
-        .aladino-profile-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          background: var(--primary);
-        }
-       
-        .aladino-profile-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-       
-        .aladino-brand-title {
-          font-family: 'Montserrat', sans-serif;
-          font-size: 20px;
-          font-weight: 600;
-          color: var(--sidebar-foreground);
-        }
-       
-        .aladino-new-chat-button {
-          background: var(--primary);
-          border: none;
-          color: var(--primary-foreground);
-          padding: 14px 20px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 500;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all 0.2s ease;
-          width: 100%;
-        }
-       
-        .aladino-new-chat-button:hover {
-          background: var(--accent);
-          transform: translateY(-1px);
-        }
-       
-        .aladino-memory-toggle {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 16px 0 0 0;
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--sidebar-foreground);
-        }
-       
-        .aladino-switch {
-          position: relative;
-          display: inline-block;
-          width: 44px;
-          height: 24px;
-        }
-       
-        .aladino-switch input {
-          opacity: 0;
-          width: 0;
-          height: 0;
-        }
-       
-        .aladino-slider {
-          position: absolute;
-          cursor: pointer;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: #ccc;
-          transition: 0.4s;
-          border-radius: 24px;
-        }
-       
-        .aladino-slider:before {
-          position: absolute;
-          content: "";
-          height: 18px;
-          width: 18px;
-          left: 3px;
-          bottom: 3px;
-          background-color: white;
-          transition: 0.4s;
-          border-radius: 50%;
-        }
-       
-        .aladino-switch input:checked + .aladino-slider {
-          background-color: var(--primary);
-        }
-       
-        .aladino-switch input:checked + .aladino-slider:before {
-          transform: translateX(20px);
-        }
-       
-        .aladino-sidebar-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          min-height: 0;
-        }
-       
-        .aladino-chat-list-wrapper {
-          flex: 0 1 auto;
-          max-height: 40%;
-          overflow-y: auto;
-          padding: 16px 20px;
-        }
-       
-        .aladino-chat-item {
-          padding: 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          margin-bottom: 2px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-       
-        .aladino-chat-item:hover {
-          background: var(--sidebar-primary);
-        }
-       
-        .aladino-chat-item.active {
-          background: var(--secondary);
-          color: var(--secondary-foreground);
-        }
-       
-        .aladino-chat-item-content {
-          flex: 1;
-        }
-       
-        .aladino-chat-item-title {
-          font-weight: 500;
-          font-size: 14px;
-          color: var(--sidebar-foreground);
-          margin-bottom: 4px;
-        }
-       
-        .aladino-chat-item-subtitle {
-          font-size: 12px;
-          color: var(--muted-foreground);
-        }
-       
-        .aladino-delete-btn {
-          opacity: 0;
-          background: #ef4444;
-          border: none;
-          color: white;
-          width: 24px;
-          height: 24px;
+
+        ::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
           border-radius: 4px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-          font-size: 12px;
         }
-       
-        .aladino-chat-item:hover .aladino-delete-btn {
-          opacity: 1;
+
+        ::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
         }
-       
-        .aladino-delete-btn:hover {
-          background: #dc2626;
-        }
-       
-        .aladino-agents-section {
-          flex: 1;
-          min-height: 0;
-          padding: 16px 20px;
-          border-top: 1px solid var(--sidebar-border);
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-       
-        .aladino-agents-title {
-          font-family: 'Montserrat', sans-serif;
-          font-size: 16px;
-          font-weight: 600;
-          color: var(--sidebar-foreground);
-          margin-bottom: 16px;
-          flex-shrink: 0;
-        }
-       
-        .aladino-agents-list {
-          flex: 1;
-          min-height: 0;
-          overflow-y: auto;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-       
-        .aladino-agent-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 12px;
-          border-radius: 8px;
-          text-decoration: none;
-          color: var(--sidebar-foreground);
-          transition: background-color 0.2s ease;
-        }
-       
-        .aladino-agent-item:hover {
-          background-color: var(--sidebar-primary);
-        }
-       
-        .aladino-agent-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: var(--muted);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          flex-shrink: 0;
-        }
-       
-        .aladino-agent-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-       
-        .aladino-agent-name {
-          font-size: 14px;
-          font-weight: 500;
-        }
-       
-        .aladino-main {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          background: var(--background);
-        }
-       
-        .aladino-header {
-          background: #235E84;
-          color: #ffffff;
-          padding: 20px 40px;
-          border-bottom: 1px solid var(--border);
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          min-height: 80px;
-        }
-       
-        .aladino-header-left {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-       
-        .aladino-header-right {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-       
-        .aladino-toggle-btn {
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          padding: 10px;
-          border-radius: 8px;
-          cursor: pointer;
-          color: #ffffff;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-       
-        .aladino-toggle-btn:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-       
-        .aladino-title {
-          font-family: 'Montserrat', sans-serif;
-          font-size: 20px;
-          font-weight: 600;
-          color: #ffffff;
-        }
-       
-        .aladino-home-btn {
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          padding: 10px;
-          border-radius: 8px;
-          cursor: pointer;
-          color: #ffffff;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-       
-        .aladino-home-btn:hover {
-          background: rgba(255, 255, 255, 0.2);
-        }
-       
-        .aladino-user-btn {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          overflow: hidden;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-       
-        .aladino-messages {
-          flex: 1;
-          overflow-y: auto;
-          padding: 50px 80px;
-          background: var(--background);
-        }
-       
-        .aladino-message {
-          margin-bottom: 32px;
-          display: flex;
-          align-items: flex-start;
-          gap: 20px;
-          animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-          max-width: 90%;
-        }
-       
+
         @keyframes fadeInUp {
           from {
             opacity: 0;
@@ -810,100 +410,11 @@ export default function AladinoAI() {
             transform: translateY(0);
           }
         }
-       
-        .aladino-message.user {
-          flex-direction: row-reverse;
-          margin-left: auto;
-        }
-       
-        .aladino-message-avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 600;
-          font-size: 14px;
-          flex-shrink: 0;
-          overflow: hidden;
-        }
-       
-        .aladino-message-avatar img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-       
-        .aladino-message.ai .aladino-message-avatar {
-          background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-          color: var(--primary-foreground);
-        }
-       
-        .aladino-message.user .aladino-message-avatar {
-          background: var(--secondary);
-          color: var(--secondary-foreground);
-        }
-       
-        .aladino-message-content {
-          flex: 1;
-          background: #ffffff;
-          padding: 20px 24px;
-          border-radius: var(--radius);
-          border: 1px solid var(--border);
-          min-width: 200px;
-        }
-       
-        .aladino-message.user .aladino-message-content {
-          background: #235E84;
-          color: #ffffff;
-          border-color: #235E84;
-        }
-       
-        .aladino-message-text {
-          color: var(--card-foreground);
-          line-height: 1.6;
-          font-size: 15px;
-        }
-       
-        .aladino-message.user .aladino-message-text {
-          color: #ffffff;
-        }
-       
-        .aladino-message-time {
-          font-size: 12px;
-          color: var(--muted-foreground);
-          margin-top: 8px;
-        }
-       
-        .aladino-message.user .aladino-message-time {
-          color: rgba(255, 255, 255, 0.7);
-        }
-       
-        .aladino-thinking-dots {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-       
-        .aladino-thinking-dots .dot {
-          width: 8px;
-          height: 8px;
-          background-color: var(--muted-foreground);
-          border-radius: 50%;
-          animation: typing 1.4s infinite ease-in-out both;
-        }
-       
-        .aladino-thinking-dots .dot:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-       
-        .aladino-thinking-dots .dot:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-       
+
         @keyframes typing {
-          0%, 60%, 100% {
+          0%,
+          60%,
+          100% {
             transform: translateY(0);
             opacity: 0.4;
           }
@@ -913,6 +424,7 @@ export default function AladinoAI() {
           }
         }
 
+        /* Table styling for markdown tables */
         .aladino-message-content table {
           width: 100% !important;
           display: table !important;
@@ -953,6 +465,7 @@ export default function AladinoAI() {
           border-bottom: none !important;
         }
 
+        /* User message table styles */
         .aladino-message.user .aladino-message-content table {
           background-color: rgba(255,255,255,0.1) !important;
           border-color: rgba(255,255,255,0.3) !important;
@@ -972,414 +485,233 @@ export default function AladinoAI() {
         .aladino-message.user .aladino-message-content tr:nth-child(even) td {
           background-color: rgba(255,255,255,0.05) !important;
         }
-       
-        .aladino-input-container {
-          padding: 30px 80px;
-          border-top: 1px solid var(--border);
-          background: var(--background);
-        }
-       
-        .aladino-input-wrapper {
-          display: flex;
-          align-items: flex-end;
-          gap: 12px;
-          background: var(--card);
-          border: 2px solid var(--border);
-          border-radius: var(--radius);
-          padding: 12px 16px;
-          transition: all 0.2s ease;
-        }
-       
-        .aladino-input-wrapper:focus-within {
-          border-color: var(--primary);
-          box-shadow: 0 0 0 3px rgba(35, 94, 132, 0.1);
-        }
-       
-        .aladino-file-btn {
-          background: transparent;
-          border: none;
-          color: var(--muted-foreground);
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-          flex-shrink: 0;
-        }
-       
-        .aladino-file-btn:hover {
-          background: var(--muted);
-          color: var(--primary);
-        }
-       
-        .aladino-input {
-          flex: 1;
-          border: none;
-          outline: none;
-          background: transparent;
-          font-size: 15px;
-          color: var(--foreground);
-          resize: none;
-          min-height: 24px;
-          max-height: 120px;
-          font-family: inherit;
-        }
-       
-        .aladino-input::placeholder {
-          color: var(--muted-foreground);
-        }
-       
-        .aladino-send-btn {
-          background: var(--primary);
-          border: none;
-          color: var(--primary-foreground);
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s ease;
-          flex-shrink: 0;
-        }
-       
-        .aladino-send-btn:hover:not(:disabled) {
-          background: var(--accent);
-          transform: scale(1.05);
-        }
-       
-        .aladino-send-btn:disabled {
-          background: var(--muted);
-          color: var(--muted-foreground);
-          cursor: not-allowed;
-        }
-       
-        .aladino-chat-list-wrapper::-webkit-scrollbar,
-        .aladino-agents-list::-webkit-scrollbar {
-          width: 6px;
-        }
-       
-        .aladino-chat-list-wrapper::-webkit-scrollbar-track,
-        .aladino-agents-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-       
-        .aladino-chat-list-wrapper::-webkit-scrollbar-thumb,
-        .aladino-agents-list::-webkit-scrollbar-thumb {
-          background: var(--border);
-          border-radius: 3px;
-        }
-       
-        .aladino-chat-list-wrapper::-webkit-scrollbar-thumb:hover,
-        .aladino-agents-list::-webkit-scrollbar-thumb:hover {
-          background: var(--muted-foreground);
-        }
-       
+
         @media (max-width: 1024px) {
-          .aladino-sidebar {
-            width: 280px;
-            min-width: 280px;
+          .sidebar {
+            width: 280px !important;
+            min-width: 280px !important;
           }
-         
-          .aladino-header {
-            padding: 16px 24px;
-            min-height: 70px;
+          .chat-messages {
+            padding: 30px 40px !important;
           }
-         
-          .aladino-title {
-            font-size: 18px;
-          }
-         
-          .aladino-messages {
-            padding: 40px 40px;
-          }
-         
-          .aladino-input-container {
-            padding: 20px 40px;
-          }
-         
-          .aladino-message {
-            max-width: 95%;
+          .input-container {
+            padding: 20px 40px !important;
           }
         }
-       
+
         @media (max-width: 768px) {
-          .aladino-mobile-menu-btn {
-            display: flex;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            color: #ffffff;
-            transition: all 0.2s ease;
-            align-items: center;
-            justify-content: center;
-          }
-         
-          .aladino-mobile-menu-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-          }
-         
-          .aladino-sidebar-close-btn {
-            display: flex;
-          }
-         
-          .aladino-mobile-menu-btn {
-            display: flex;
-          }
-         
-          .aladino-toggle-btn {
-            display: none;
-          }
-         
-          .aladino-sidebar {
-            position: fixed;
-            top: 0;
+          .sidebar {
+            position: fixed !important;
             left: 0;
-            width: 100%;
-            max-width: 320px;
+            top: 0;
             height: 100vh;
             z-index: 1000;
-            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
-          }
-         
-          .aladino-sidebar.hidden {
             transform: translateX(-100%);
+            box-shadow: none;
           }
-         
-          .aladino-header {
-            padding: 12px 16px;
-            min-height: 60px;
+          .sidebar.visible {
+            transform: translateX(0);
+            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
           }
-         
-          .aladino-title {
-            font-size: 16px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 180px;
+          .chat-header {
+            padding: 16px 20px !important;
+            min-height: 70px !important;
           }
-         
-          .aladino-messages {
-            padding: 24px 16px;
+          .chat-header-title {
+            font-size: 16px !important;
           }
-         
-          .aladino-input-container {
-            padding: 16px;
+          .chat-messages {
+            padding: 20px 16px !important;
           }
-         
-          .aladino-message {
-            gap: 12px;
-            margin-bottom: 24px;
-            max-width: 100%;
+          .message-container {
+            max-width: 100% !important;
           }
-         
-          .aladino-message-avatar {
-            width: 32px;
-            height: 32px;
-            font-size: 12px;
+          .input-container {
+            padding: 16px !important;
           }
-         
-          .aladino-message-content {
-            padding: 16px;
+          .hamburger-menu {
+            display: flex !important;
           }
-         
-          .aladino-message-text {
-            font-size: 14px;
+          .desktop-toggle {
+            display: none !important;
           }
-         
-          .aladino-input-wrapper {
-            padding: 10px 12px;
-          }
-         
-          .aladino-input {
-            font-size: 14px;
-          }
-         
-          .aladino-send-btn,
-          .aladino-file-btn {
-            width: 36px;
-            height: 36px;
+          .close-sidebar-btn {
+            display: flex !important;
           }
         }
-       
+
         @media (max-width: 480px) {
-          .aladino-sidebar {
-            max-width: 280px;
+          .chat-header {
+            padding: 12px 16px !important;
+            min-height: 60px !important;
           }
-         
-          .aladino-sidebar-header {
-            padding: 16px;
+          .chat-header-title {
+            font-size: 14px !important;
           }
-         
-          .aladino-brand-title {
-            font-size: 18px;
+          .sidebar-header {
+            padding: 16px !important;
           }
-         
-          .aladino-profile-avatar {
-            width: 36px;
-            height: 36px;
+          .sidebar-title {
+            font-size: 18px !important;
           }
-         
-          .aladino-new-chat-button {
-            padding: 12px 16px;
-            font-size: 13px;
+          .avatar-large {
+            width: 32px !important;
+            height: 32px !important;
           }
-         
-          .aladino-header {
-            padding: 10px 12px;
-            min-height: 56px;
+          .avatar-small {
+            width: 32px !important;
+            height: 32px !important;
           }
-         
-          .aladino-title {
-            font-size: 14px;
-            max-width: 140px;
+          .new-chat-btn {
+            padding: 12px 16px !important;
+            font-size: 13px !important;
           }
-         
-          .aladino-home-btn,
-          .aladino-toggle-btn {
-            width: 36px;
-            height: 36px;
-            padding: 8px;
+          .chat-messages {
+            padding: 16px 12px !important;
           }
-         
-          .aladino-user-btn {
-            width: 36px;
-            height: 36px;
+          .message-bubble {
+            padding: 16px 18px !important;
+            font-size: 14px !important;
           }
-         
-          .aladino-messages {
-            padding: 16px 12px;
-          }
-         
-          .aladino-message {
-            gap: 8px;
-            margin-bottom: 20px;
-          }
-         
-          .aladino-message-avatar {
-            width: 28px;
-            height: 28px;
-          }
-         
-          .aladino-message-content {
-            padding: 12px 14px;
-          }
-         
-          .aladino-message-text {
-            font-size: 13px;
-          }
-         
-          .aladino-message-time {
-            font-size: 11px;
-          }
-         
-          .aladino-input-container {
-            padding: 12px;
-          }
-         
-          .aladino-input-wrapper {
-            padding: 8px 10px;
-          }
-         
-          .aladino-input {
-            font-size: 13px;
-          }
-         
-          .aladino-send-btn,
-          .aladino-file-btn {
-            width: 32px;
-            height: 32px;
-          }
-         
-          .aladino-chat-list-wrapper,
-          .aladino-agents-section {
-            padding: 12px 16px;
-          }
-         
-          .aladino-chat-item {
-            padding: 12px;
-          }
-         
-          .aladino-chat-item-title {
-            font-size: 13px;
-          }
-         
-          .aladino-chat-item-subtitle {
-            font-size: 11px;
-          }
-         
-          .aladino-agent-item {
-            padding: 8px 10px;
-          }
-         
-          .aladino-agent-avatar {
-            width: 28px;
-            height: 28px;
-          }
-         
-          .aladino-agent-name {
-            font-size: 13px;
+          .input-container {
+            padding: 12px !important;
           }
         }
-       
+
         @media (max-width: 360px) {
-          .aladino-title {
-            max-width: 100px;
+          .chat-header-title {
+            font-size: 12px !important;
           }
-         
-          .aladino-header-right {
-            gap: 8px;
+          .sidebar-title {
+            font-size: 16px !important;
           }
-         
-          .aladino-message-content {
-            padding: 10px 12px;
+          .avatar-large {
+            width: 28px !important;
+            height: 28px !important;
           }
-         
-          .aladino-message-text {
-            font-size: 12px;
+          .message-bubble {
+            padding: 14px 16px !important;
+            font-size: 13px !important;
           }
+        }
+
+        .hamburger-menu {
+          display: none;
+        }
+
+        .close-sidebar-btn {
+          display: none;
         }
       `}</style>
 
-      <div className="aladino-container">
-        <div className={`aladino-sidebar ${!sidebarVisible ? "hidden" : ""}`}>
-          <div className="aladino-sidebar-header">
-            <div className="aladino-brand-header">
-              <div className="aladino-brand-section">
-                <div className="aladino-profile-avatar">
+      <div style={{ width: "100%", height: "100vh", display: "flex", overflow: "hidden", background: "#ffffff" }}>
+        {/* Sidebar */}
+        <div
+          className={`sidebar ${sidebarVisible ? "visible" : ""}`}
+          style={{
+            width: sidebarVisible ? "320px" : "0",
+            minWidth: sidebarVisible ? "320px" : "0",
+            background: "#ffffff",
+            borderRight: sidebarVisible ? "1px solid #e2e8f0" : "none",
+            display: "flex",
+            flexDirection: "column",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            overflow: "hidden",
+          }}
+        >
+          {/* Sidebar Header */}
+          <div className="sidebar-header" style={{ padding: "20px", borderBottom: "1px solid #e2e8f0" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  className="avatar-large"
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background: "#235E84",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   <img
                     src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
                     alt="Aladino AI"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 </div>
-                <div className="aladino-brand-title">Aladino AI</div>
+                <div
+                  className="sidebar-title"
+                  style={{ fontFamily: "Montserrat, sans-serif", fontSize: "20px", fontWeight: 600, color: "#475569" }}
+                >
+                  Aladino AI
+                </div>
               </div>
               <button
-                className="aladino-sidebar-close-btn"
+                className="close-sidebar-btn"
                 onClick={() => {
                   setSidebarVisible(false)
                   localStorage.setItem("aladino-ai-sidebar-visible", "false")
                 }}
-                title="Chiudi"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#475569",
+                  cursor: "pointer",
+                  padding: "8px",
+                  borderRadius: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "20px",
+                  lineHeight: 1,
+                }}
+                title="Chiudi menu"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                ×
               </button>
             </div>
-            <button className="aladino-new-chat-button" onClick={createNewChat}>
+
+            <button
+              onClick={createNewChat}
+              className="new-chat-btn"
+              style={{
+                background: "#235E84",
+                border: "none",
+                color: "#ffffff",
+                padding: "14px 20px",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                width: "100%",
+                transition: "all 0.2s ease",
+              }}
+            >
               <span>+</span> Nuova Chat
             </button>
-            <div className="aladino-memory-toggle">
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: "16px",
+                fontSize: "14px",
+                fontWeight: 500,
+                color: "#475569",
+              }}
+            >
               <label htmlFor="memoryToggle">Usa Memoria</label>
-              <label className="aladino-switch">
+              <label style={{ position: "relative", display: "inline-block", width: "44px", height: "24px" }}>
                 <input
                   type="checkbox"
                   id="memoryToggle"
@@ -1388,161 +720,275 @@ export default function AladinoAI() {
                     setUseMemory(e.target.checked)
                     localStorage.setItem("aladino-ai-use-memory", String(e.target.checked))
                   }}
+                  style={{ opacity: 0, width: 0, height: 0 }}
                 />
-                <span className="aladino-slider"></span>
+                <span
+                  style={{
+                    position: "absolute",
+                    cursor: "pointer",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: useMemory ? "#235E84" : "#ccc",
+                    transition: "0.4s",
+                    borderRadius: "24px",
+                  }}
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      content: '""',
+                      height: "18px",
+                      width: "18px",
+                      left: "3px",
+                      bottom: "3px",
+                      background: "white",
+                      transition: "0.4s",
+                      borderRadius: "50%",
+                      transform: useMemory ? "translateX(20px)" : "translateX(0)",
+                    }}
+                  />
+                </span>
               </label>
             </div>
           </div>
 
-          <div className="aladino-sidebar-content">
-            <div className="aladino-chat-list-wrapper">
-              {sortedChats.map(([id, chat]: any) => {
-                const dateObj = new Date(chat.lastUpdated)
-                const dayNum = dateObj.getDate()
-                const monthStr = monthNames[dateObj.getMonth()]
-                const hourStr = String(dateObj.getHours()).padStart(2, "0")
-                const minuteStr = String(dateObj.getMinutes()).padStart(2, "0")
-                const formattedDate = `${dayNum} ${monthStr} h. ${hourStr}:${minuteStr}`
+          {/* Chat List */}
+          <div style={{ flex: "0 1 auto", maxHeight: "40%", overflowY: "auto", padding: "16px 20px", minHeight: 0 }}>
+            {sortedChats.map(([id, chat]) => {
+              const dateObj = new Date(chat.lastUpdated)
+              const monthNames = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+              const formattedDate = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} h. ${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`
 
-                return (
-                  <div
-                    key={id}
-                    className={`aladino-chat-item ${id === currentChatId ? "active" : ""}`}
-                    onClick={() => loadChat(id)}
-                  >
-                    <div className="aladino-chat-item-content">
-                      <div className="aladino-chat-item-title">{chat.title || "Nuova Conversazione"}</div>
-                      <div className="aladino-chat-item-subtitle">{formattedDate}</div>
+              return (
+                <div
+                  key={id}
+                  onClick={() => loadChat(id)}
+                  style={{
+                    padding: "16px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    marginBottom: "2px",
+                    background: id === currentChatId ? "#E3F2FD" : "transparent",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (id !== currentChatId) e.currentTarget.style.background = "#E3F2FD"
+                  }}
+                  onMouseLeave={(e) => {
+                    if (id !== currentChatId) e.currentTarget.style.background = "transparent"
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: "14px", color: "#475569", marginBottom: "4px" }}>
+                      {chat.title || "Nuova Conversazione"}
                     </div>
-                    <button
-                      className="aladino-delete-btn"
-                      onClick={(e) => deleteChat(id, e)}
-                      title="Elimina conversazione"
-                    >
-                      🗑
-                    </button>
+                    <div style={{ fontSize: "12px", color: "#64748b" }}>{formattedDate}</div>
                   </div>
-                )
-              })}
-            </div>
+                  <button
+                    onClick={(e) => deleteChat(id, e)}
+                    style={{
+                      background: "#ef4444",
+                      border: "none",
+                      color: "white",
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      transition: "all 0.2s ease",
+                    }}
+                    title="Elimina conversazione"
+                  >
+                    🗑
+                  </button>
+                </div>
+              )
+            })}
+          </div>
 
-            <div className="aladino-agents-section">
-              <h3 className="aladino-agents-title">AGENTI AI:</h3>
-              <div className="aladino-agents-list">
-                <a href="/dashboard/tony-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
+          {/* Agents Section */}
+          <div
+            style={{
+              flex: "1 1 auto",
+              minHeight: 0,
+              padding: "16px 20px",
+              borderTop: "1px solid #e2e8f0",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <h3
+              style={{
+                fontFamily: "Montserrat, sans-serif",
+                fontSize: "16px",
+                fontWeight: 600,
+                color: "#475569",
+                marginBottom: "16px",
+              }}
+            >
+              AGENTI AI:
+            </h3>
+            <div
+              style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", minHeight: 0 }}
+            >
+              {[
+                {
+                  name: "Tony AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
+                  href: "/dashboard/tony-ai",
+                },
+                {
+                  name: "Aladino AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
+                  href: "/dashboard/aladino-ai",
+                },
+                {
+                  name: "Lara AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png",
+                  href: "/dashboard/lara-ai",
+                },
+                {
+                  name: "Simone AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png",
+                  href: "/dashboard/simone-ai",
+                },
+                {
+                  name: "Mike AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
+                  href: "/dashboard/mike-ai",
+                },
+                {
+                  name: "Alex AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png",
+                  href: "/dashboard/alex-ai",
+                },
+                {
+                  name: "Valentina AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Valentina-AI-email-marketing.png",
+                  href: "/dashboard/valentina-ai",
+                },
+                {
+                  name: "Niko AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI-content-creator.png",
+                  href: "/dashboard/niko-ai",
+                },
+                {
+                  name: "Jim AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-podcast-expert.png",
+                  href: "/dashboard/jim-ai",
+                },
+                {
+                  name: "Daniele AI",
+                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
+                  href: "/dashboard/daniele-ai",
+                },
+              ].map((agent) => (
+                <Link
+                  key={agent.name}
+                  href={agent.href}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "10px 12px",
+                    borderRadius: "8px",
+                    textDecoration: "none",
+                    color: "#475569",
+                    transition: "background-color 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#E3F2FD")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                >
+                  <div
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      flexShrink: 0,
+                    }}
+                  >
                     <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
-                      alt="Tony"
+                      src={agent.img || "/placeholder.svg"}
+                      alt={agent.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
                   </div>
-                  <span className="aladino-agent-name">Tony AI</span>
-                </a>
-                <a href="/dashboard/aladino-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
-                      alt="Aladino"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Aladdin AI</span>
-                </a>
-                <a href="/dashboard/lara-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png"
-                      alt="Lara"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Lara AI</span>
-                </a>
-                <a href="/dashboard/simone-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png"
-                      alt="Simone"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Simone AI</span>
-                </a>
-                <a href="/dashboard/mike-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png"
-                      alt="Mike ai"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Mike AI</span>
-                </a>
-                <a href="/dashboard/valentina-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/Valentina-AI-AI-SEO-optimizer.png"
-                      alt="Valentina ai"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Valentina AI</span>
-                </a>
-                <a href="/dashboard/niko-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png" alt="Niko ai" />
-                  </div>
-                  <span className="aladino-agent-name">Niko AI</span>
-                </a>
-                <a href="/dashboard/jim-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-%E2%80%93-AI-Coach.png"
-                      alt="Jim AI"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Jim AI</span>
-                </a>
-                <a href="/dashboard/daniele-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png"
-                      alt="Daniele ai"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Daniele AI</span>
-                </a>
-                <a href="/dashboard/alex-ai" target="_blank" rel="noopener noreferrer" className="aladino-agent-item">
-                  <div className="aladino-agent-avatar">
-                    <img
-                      src="https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png"
-                      alt="Alex ai"
-                    />
-                  </div>
-                  <span className="aladino-agent-name">Alex AI</span>
-                </a>
-              </div>
+                  <span style={{ fontSize: "14px", fontWeight: 500 }}>{agent.name}</span>
+                </Link>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="aladino-main">
-          <div className="aladino-header">
-            <div className="aladino-header-left">
+        {/* Chat Container */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, background: "#ffffff" }}>
+          {/* Chat Header */}
+          <div
+            className="chat-header"
+            style={{
+              background: "#235E84",
+              color: "#ffffff",
+              padding: "20px 40px",
+              borderBottom: "1px solid #e2e8f0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              minHeight: "80px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
               <button
-                className="aladino-mobile-menu-btn"
+                className="hamburger-menu"
                 onClick={() => {
-                  setSidebarVisible(!sidebarVisible)
-                  localStorage.setItem("aladino-ai-sidebar-visible", String(!sidebarVisible))
+                  setSidebarVisible(true)
+                  localStorage.setItem("aladino-ai-sidebar-visible", "true")
                 }}
-                title="Menu"
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  color: "#ffffff",
+                  display: "none",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+                title="Mostra menu"
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="3" y1="12" x2="21" y2="12" />
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
                   <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
               </button>
               <button
-                className="aladino-toggle-btn"
+                className="desktop-toggle"
                 onClick={() => {
                   setSidebarVisible(!sidebarVisible)
                   localStorage.setItem("aladino-ai-sidebar-visible", String(!sidebarVisible))
+                }}
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  padding: "10px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
                 }}
                 title="Mostra/Nascondi conversazioni"
               >
@@ -1554,13 +1000,45 @@ export default function AladinoAI() {
                   )}
                 </svg>
               </button>
-              <div className="aladino-title">Aladino AI - Creatore di nuove offerte e prodotti</div>
+              <div
+                className="chat-header-title"
+                style={{
+                  fontFamily: "Montserrat, sans-serif",
+                  fontSize: "20px",
+                  fontWeight: 600,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Aladino AI - Creatore di nuove offerte e prodotti
+              </div>
             </div>
-            <div className="aladino-header-right">
-              <Link href="/" className="aladino-home-btn" title="Home">
+
+            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexShrink: 0 }}>
+              <Link
+                href="/"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  color: "#ffffff",
+                  transition: "all 0.2s ease",
+                  cursor: "pointer",
+                }}
+                title="Home"
+              >
                 <Home size={20} />
               </Link>
-              <div className="aladino-user-btn">
+              <div
+                className="avatar-small"
+                style={{ width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden" }}
+              >
                 <UserButton
                   appearance={{
                     elements: {
@@ -1572,10 +1050,43 @@ export default function AladinoAI() {
             </div>
           </div>
 
-          <div className="aladino-messages">
+          {/* Messages */}
+          <div
+            className="chat-messages"
+            style={{ flex: 1, overflowY: "auto", padding: "50px 80px", background: "#ffffff" }}
+          >
             {messages.map((message, index) => (
-              <div key={index} className={`aladino-message ${message.sender}`}>
-                <div className="aladino-message-avatar">
+              <div
+                key={index}
+                className={`message-container aladino-message ${message.sender}`}
+                style={{
+                  marginBottom: "32px",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "20px",
+                  animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                  maxWidth: "90%",
+                  flexDirection: message.sender === "user" ? "row-reverse" : "row",
+                  marginLeft: message.sender === "user" ? "auto" : "0",
+                }}
+              >
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    background:
+                      message.sender === "ai" ? "linear-gradient(135deg, #235E84 0%, #235E84 100%)" : "#E3F2FD",
+                    color: message.sender === "ai" ? "#ffffff" : "#235E84",
+                    flexShrink: 0,
+                    fontWeight: 600,
+                    fontSize: "14px",
+                  }}
+                >
                   <img
                     src={
                       message.sender === "ai"
@@ -1583,22 +1094,58 @@ export default function AladinoAI() {
                         : "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
                     }
                     alt={message.sender === "ai" ? "Aladino AI" : "Cliente"}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 </div>
-                <div className="aladino-message-content">
+
+                <div
+                  className="message-bubble aladino-message-content"
+                  style={{
+                    flex: 1,
+                    background: message.sender === "user" ? "#235E84" : "#ffffff",
+                    padding: "20px 24px",
+                    borderRadius: "12px",
+                    border: message.sender === "user" ? "1px solid #235E84" : "1px solid #e2e8f0",
+                    minWidth: "200px",
+                  }}
+                >
                   {message.text === "..." ? (
-                    <div className="aladino-thinking-dots">
-                      <div className="dot"></div>
-                      <div className="dot"></div>
-                      <div className="dot"></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            background: "#64748b",
+                            borderRadius: "50%",
+                            animation: "typing 1.4s infinite ease-in-out both",
+                            animationDelay: `${i * 0.2}s`,
+                          }}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <>
                       <div
-                        className="aladino-message-text"
+                        style={{
+                          color: message.sender === "user" ? "#ffffff" : "#334155",
+                          lineHeight: 1.6,
+                          fontSize: "15px",
+                        }}
                         dangerouslySetInnerHTML={{ __html: formatMessageText(message.text) }}
                       />
-                      {message.time && <div className="aladino-message-time">{message.time}</div>}
+                      {message.time && (
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: message.sender === "user" ? "rgba(255,255,255,0.7)" : "#64748b",
+                            marginTop: "8px",
+                          }}
+                        >
+                          {message.time}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -1607,22 +1154,61 @@ export default function AladinoAI() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="aladino-input-container">
-            <div className="aladino-input-wrapper">
+          {/* Input */}
+          <div
+            className="input-container"
+            style={{ padding: "30px 80px", borderTop: "1px solid #e2e8f0", background: "#ffffff" }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: "12px",
+                background: "#ffffff",
+                border: "2px solid #e2e8f0",
+                borderRadius: "12px",
+                padding: "12px 16px",
+                transition: "all 0.2s ease",
+              }}
+            >
               <textarea
                 ref={textareaRef}
-                className="aladino-input"
-                placeholder="Scrivi la tua domanda per Aladino..."
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                value={input}
+                onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                rows={1}
+                placeholder="Scrivi la tua domanda per Aladino..."
                 disabled={isLoading}
+                style={{
+                  flex: 1,
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: "15px",
+                  color: "#475569",
+                  resize: "none",
+                  minHeight: "24px",
+                  maxHeight: "120px",
+                  fontFamily: "inherit",
+                }}
+                rows={1}
               />
               <button
-                className="aladino-send-btn"
                 onClick={sendMessage}
-                disabled={!inputValue.trim() || isLoading}
+                disabled={!input.trim() || isLoading}
+                style={{
+                  background: input.trim() && !isLoading ? "#235E84" : "#cbd5e1",
+                  border: "none",
+                  color: "#ffffff",
+                  width: "40px",
+                  height: "40px",
+                  borderRadius: "50%",
+                  cursor: input.trim() && !isLoading ? "pointer" : "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "all 0.2s ease",
+                }}
                 title="Invia (Invio)"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
