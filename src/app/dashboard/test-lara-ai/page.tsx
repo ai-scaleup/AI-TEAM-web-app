@@ -33,7 +33,7 @@ export default function LaraAI() {
   const CURRENT_NAMESPACE = useRef<string>("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/59483f3b-8c59-4381-b94b-9c80a69b8196/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/375630aa-9de9-4884-858f-d9a552f0de45/chat"
 
   useEffect(() => {
     const generateUUID = () => {

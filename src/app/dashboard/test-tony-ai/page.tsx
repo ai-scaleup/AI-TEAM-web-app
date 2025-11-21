@@ -33,7 +33,7 @@ export default function TonyAIPage() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/0c898053-01f4-494d-b013-165c8a9023d1/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/53b24a5e-80c2-4a41-8755-59f37ba751dc/chat"
 
   useEffect(() => {
     const generateUUID = () => {

@@ -33,7 +33,7 @@ export default function MikeAIPage() {
   const CURRENT_NAMESPACE = useRef<string>("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/66f3ee04-7d9b-4ae4-9e13-0af7a4cdde77/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/65dd9b3d-a55c-41bc-943e-7ba9e38646b6/chat"
 
   useEffect(() => {
     let ns = localStorage.getItem("Namespace")

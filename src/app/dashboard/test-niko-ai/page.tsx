@@ -34,7 +34,7 @@ export default function NikoAI() {
   const CURRENT_NAMESPACE = useRef<string>("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/b7e1d215-fd19-4404-88ce-b6a8d13db9ad/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/65dd9b3d-a55c-41bc-943e-7ba9e38646b6/chat"
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })

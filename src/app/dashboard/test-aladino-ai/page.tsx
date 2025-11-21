@@ -33,7 +33,7 @@ export default function AladinoAIPage() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/f3ee3b1a-b98b-4108-9381-dc34e7d34518/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/d601660e-0387-406d-b314-3db2b503708e/chat"
 
   useEffect(() => {
     const generateUUID = () => {

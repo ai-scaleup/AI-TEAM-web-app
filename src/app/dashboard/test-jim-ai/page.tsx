@@ -33,7 +33,7 @@ export default function JimAIPage() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/bdc4cf07-48f7-4144-ac75-659ab5197b2b/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/7f2d20c5-758f-41e7-9b5f-199285244a72/chat"
 
   useEffect(() => {
     const generateUUID = () => {

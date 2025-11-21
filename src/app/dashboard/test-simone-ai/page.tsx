@@ -25,7 +25,7 @@ interface ChatsObject {
 }
 
 const N8N_ENDPOINT =
-  "https://n8n-c2lq.onrender.com/webhook/da2742bb-3308-4d18-a58b-77abed489389/chat?action=sendMessage"
+  "https://n8n-c2lq.onrender.com/webhook/2c20e4ed-16d7-417a-a325-d20f7d81f08c/chat"
 
 export default function SimoneAI() {
   const [messages, setMessages] = useState<Message[]>([])

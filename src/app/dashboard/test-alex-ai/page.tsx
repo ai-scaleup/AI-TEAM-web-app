@@ -33,7 +33,7 @@ export default function AlexAIPage() {
   const CURRENT_NAMESPACE = useRef<string>("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/65c03f65-d13c-43c7-967d-708dcceef965/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/3faf5872-7b90-4379-99ef-e7ed9de59bd4/chat"
 
   useEffect(() => {
     let ns = localStorage.getItem("Namespace")

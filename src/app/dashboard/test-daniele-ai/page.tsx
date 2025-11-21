@@ -33,7 +33,7 @@ export default function DanieleAIPage() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/b53858eb-1e73-4798-80ae-13c0d3323f1a/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/dc2f96e1-1da2-4b28-98af-aa83e63c1976/chat"
 
   useEffect(() => {
     const generateUUID = () => {
