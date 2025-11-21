@@ -20,7 +20,7 @@ interface Chat {
   title: string
 }
 
-export default function TonyAIPage() {
+export default function AladinoAIPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -33,7 +33,7 @@ export default function TonyAIPage() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/0c898053-01f4-494d-b013-165c8a9023d1/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/f3ee3b1a-b98b-4108-9381-dc34e7d34518/chat?action=sendMessage"
 
   useEffect(() => {
     const generateUUID = () => {
@@ -51,7 +51,7 @@ export default function TonyAIPage() {
     }
     CURRENT_NAMESPACE.current = ns
 
-    const storedChats = localStorage.getItem("tony-ai-chats")
+    const storedChats = localStorage.getItem("aladino-ai-chats")
     if (storedChats) {
       const parsedChats = JSON.parse(storedChats)
       setChats(parsedChats)
@@ -71,16 +71,16 @@ export default function TonyAIPage() {
       createInitialMessage()
     }
 
-    const storedMemory = localStorage.getItem("tony-ai-use-memory")
+    const storedMemory = localStorage.getItem("aladino-ai-use-memory")
     setUseMemory(storedMemory !== "false")
 
-    const storedSidebarVisible = localStorage.getItem("tony-ai-sidebar-visible")
+    const storedSidebarVisible = localStorage.getItem("aladino-ai-sidebar-visible")
     setSidebarVisible(storedSidebarVisible !== "false")
   }, [])
 
   const createInitialMessage = () => {
     const initialMessage: Message = {
-      text: "Ciao! Sono Tony AI, il tuo consulente vendite digitale con 30 anni di esperienza. Sono qui per aiutarti a migliorare le tue strategie di vendita e raggiungere i tuoi obiettivi commerciali. Come posso supportarti oggi?",
+      text: "Ciao, sono Aladdin AI. Consulente virtuale per la creazione di nuovi servizi e prodotti ad alta marginalità. Come posso supportarti oggi?",
       sender: "ai",
       time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
     }
@@ -118,7 +118,7 @@ export default function TonyAIPage() {
     }
 
     setChats(updatedChats)
-    localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats))
+    localStorage.setItem("aladino-ai-chats", JSON.stringify(updatedChats))
   }
 
   const loadChat = (chatId: string) => {
@@ -134,7 +134,7 @@ export default function TonyAIPage() {
     const updatedChats = { ...chats }
     delete updatedChats[chatId]
     setChats(updatedChats)
-    localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats))
+    localStorage.setItem("aladino-ai-chats", JSON.stringify(updatedChats))
 
     if (chatId === currentChatId) {
       const remaining = Object.keys(updatedChats)
@@ -149,7 +149,7 @@ export default function TonyAIPage() {
   const createNewChat = () => {
     const newChatId = "chat_" + Date.now()
     setCurrentChatId(newChatId)
-    localStorage.setItem("tony-ai-session-id", newChatId)
+    localStorage.setItem("aladino-ai-session-id", newChatId)
     createInitialMessage()
   }
 
@@ -213,8 +213,8 @@ export default function TonyAIPage() {
     setMessages((prev) => [...prev, thinkingMessage])
 
     try {
-      const sessionId = localStorage.getItem("tony-ai-session-id") || "session_" + Date.now()
-      localStorage.setItem("tony-ai-session-id", sessionId)
+      const sessionId = localStorage.getItem("aladino-ai-session-id") || "session_" + Date.now()
+      localStorage.setItem("aladino-ai-session-id", sessionId)
 
       const response = await fetch(N8N_ENDPOINT, {
         method: "POST",
@@ -226,7 +226,7 @@ export default function TonyAIPage() {
           chatInput: userMessage.text,
           sessionId: sessionId,
           useMemory: useMemory,
-          metadata: { namespace: CURRENT_NAMESPACE.current, source: "tony-ai-chat" },
+          metadata: { namespace: CURRENT_NAMESPACE.current, source: "aladino-ai-chat" },
         }),
       })
 
@@ -425,7 +425,7 @@ export default function TonyAIPage() {
         }
 
         /* Table styling for markdown tables */
-        .tony-message-content table {
+        .aladino-message-content table {
           width: 100% !important;
           display: table !important;
           border-collapse: collapse !important;
@@ -439,7 +439,7 @@ export default function TonyAIPage() {
           box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
         }
 
-        .tony-message-content th {
+        .aladino-message-content th {
           background-color: #235E84 !important;
           color: #ffffff !important;
           padding: 12px 15px !important;
@@ -448,7 +448,7 @@ export default function TonyAIPage() {
           border-bottom: 2px solid #1a4c6e !important;
         }
 
-        .tony-message-content td {
+        .aladino-message-content td {
           background-color: #ffffff !important;
           color: #334155 !important;
           padding: 12px 15px !important;
@@ -457,32 +457,32 @@ export default function TonyAIPage() {
           line-height: 1.5 !important;
         }
 
-        .tony-message-content tr:nth-child(even) td {
+        .aladino-message-content tr:nth-child(even) td {
           background-color: #f8fafc !important;
         }
 
-        .tony-message-content tr:last-child td {
+        .aladino-message-content tr:last-child td {
           border-bottom: none !important;
         }
 
         /* User message table styles */
-        .tony-message.user .tony-message-content table {
+        .aladino-message.user .aladino-message-content table {
           background-color: rgba(255,255,255,0.1) !important;
           border-color: rgba(255,255,255,0.3) !important;
         }
 
-        .tony-message.user .tony-message-content th {
+        .aladino-message.user .aladino-message-content th {
           background-color: rgba(255,255,255,0.2) !important;
           color: #ffffff !important;
         }
 
-        .tony-message.user .tony-message-content td {
+        .aladino-message.user .aladino-message-content td {
           background-color: transparent !important;
           color: #ffffff !important;
           border-color: rgba(255,255,255,0.2) !important;
         }
 
-        .tony-message.user .tony-message-content tr:nth-child(even) td {
+        .aladino-message.user .aladino-message-content tr:nth-child(even) td {
           background-color: rgba(255,255,255,0.05) !important;
         }
 
@@ -639,8 +639,8 @@ export default function TonyAIPage() {
                   }}
                 >
                   <img
-                    src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
-                    alt="Tony AI"
+                    src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
+                    alt="Aladino AI"
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 </div>
@@ -648,14 +648,14 @@ export default function TonyAIPage() {
                   className="sidebar-title"
                   style={{ fontFamily: "Montserrat, sans-serif", fontSize: "20px", fontWeight: 600, color: "#475569" }}
                 >
-                  Tony AI
+                  Aladino AI
                 </div>
               </div>
               <button
                 className="close-sidebar-btn"
                 onClick={() => {
                   setSidebarVisible(false)
-                  localStorage.setItem("tony-ai-sidebar-visible", "false")
+                  localStorage.setItem("aladino-ai-sidebar-visible", "false")
                 }}
                 style={{
                   background: "transparent",
@@ -718,7 +718,7 @@ export default function TonyAIPage() {
                   checked={useMemory}
                   onChange={(e) => {
                     setUseMemory(e.target.checked)
-                    localStorage.setItem("tony-ai-use-memory", String(e.target.checked))
+                    localStorage.setItem("aladino-ai-use-memory", String(e.target.checked))
                   }}
                   style={{ opacity: 0, width: 0, height: 0 }}
                 />
@@ -950,7 +950,7 @@ export default function TonyAIPage() {
                 className="hamburger-menu"
                 onClick={() => {
                   setSidebarVisible(true)
-                  localStorage.setItem("tony-ai-sidebar-visible", "true")
+                  localStorage.setItem("aladino-ai-sidebar-visible", "true")
                 }}
                 style={{
                   background: "rgba(255,255,255,0.1)",
@@ -976,7 +976,7 @@ export default function TonyAIPage() {
                 className="desktop-toggle"
                 onClick={() => {
                   setSidebarVisible(!sidebarVisible)
-                  localStorage.setItem("tony-ai-sidebar-visible", String(!sidebarVisible))
+                  localStorage.setItem("aladino-ai-sidebar-visible", String(!sidebarVisible))
                 }}
                 style={{
                   background: "rgba(255,255,255,0.1)",
@@ -1011,7 +1011,7 @@ export default function TonyAIPage() {
                   whiteSpace: "nowrap",
                 }}
               >
-                Tony AI - Direttore Commerciale
+                Aladino AI - Creatore di nuove offerte e prodotti
               </div>
             </div>
 
@@ -1058,7 +1058,7 @@ export default function TonyAIPage() {
             {messages.map((message, index) => (
               <div
                 key={index}
-                className={`message-container tony-message ${message.sender}`}
+                className={`message-container aladino-message ${message.sender}`}
                 style={{
                   marginBottom: "32px",
                   display: "flex",
@@ -1090,16 +1090,16 @@ export default function TonyAIPage() {
                   <img
                     src={
                       message.sender === "ai"
-                        ? "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
+                        ? "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png"
                         : "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
                     }
-                    alt={message.sender === "ai" ? "Tony AI" : "Cliente"}
+                    alt={message.sender === "ai" ? "Aladino AI" : "Cliente"}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
                 </div>
 
                 <div
-                  className="message-bubble tony-message-content"
+                  className="message-bubble aladino-message-content"
                   style={{
                     flex: 1,
                     background: message.sender === "user" ? "#235E84" : "#ffffff",
@@ -1176,7 +1176,7 @@ export default function TonyAIPage() {
                 value={input}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Scrivi la tua domanda per Tony..."
+                placeholder="Scrivi la tua domanda per Aladino..."
                 disabled={isLoading}
                 style={{
                   flex: 1,

@@ -142,10 +142,13 @@ const agents: UiAgent[] = [
       "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
     href: "/dashboard/daniele-ai",
   },
+
+  /* ------------------------- TEST AGENTS ------------------------- */
+
   {
     key: "TEST_MIKE",
     name: "Test Mike AI",
-    role: "Test Marketing Director",
+    role: "Test Direttore Marketing",
     image:
       "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
     href: "/dashboard/test-mike-ai",
@@ -153,7 +156,7 @@ const agents: UiAgent[] = [
   {
     key: "TEST_ALEX",
     name: "Test Alex AI",
-    role: "Test ADs Manager",
+    role: "Test Cross-Platform ADs Manager",
     image:
       "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png",
     href: "/dashboard/test-alex-ai",
@@ -161,10 +164,66 @@ const agents: UiAgent[] = [
   {
     key: "TEST_TONY",
     name: "Test Tony AI",
-    role: "Test Sales Director",
+    role: "Test Direttore Commerciale",
     image:
       "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
     href: "/dashboard/test-tony-ai",
+  },
+  {
+    key: "TEST_JIM",
+    name: "Test Jim AI",
+    role: "Test Coach di Vendite",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-%E2%80%93-AI-Coach.png",
+    href: "/dashboard/test-jim-ai",
+  },
+  {
+    key: "TEST_LARA",
+    name: "Test Lara AI",
+    role: "Test Social Media Manager",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png",
+    href: "/dashboard/test-lara-ai",
+  },
+  {
+    key: "TEST_VALENTINA",
+    name: "Test Valentina AI",
+    role: "Test SEO Optimizer",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/03/Valentina-AI-AI-SEO-optimizer.png",
+    href: "/dashboard/test-valentina-ai",
+  },
+  {
+    key: "TEST_DANIELE",
+    name: "Test Daniele AI",
+    role: "Test Copywriter per Vendere (Direct Response)",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
+    href: "/dashboard/test-daniele-ai",
+  },
+  {
+    key: "TEST_SIMONE",
+    name: "Test Simone AI",
+    role: "Test SEO Copywriter",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png",
+    href: "/dashboard/test-simone-ai",
+  },
+  {
+    key: "TEST_NIKO",
+    name: "Test Niko AI",
+    role: "Test SEO Manager",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png",
+    href: "/dashboard/test-niko-ai",
+  },
+  {
+    key: "TEST_ALADINO",
+    name: "Test Aladino AI",
+    role: "Test Creatore di nuove offerte e prodotti",
+    image:
+      "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
+    href: "/dashboard/test-aladino-ai",
   },
 ]
 
@@ -183,7 +242,7 @@ export default function HomePage() {
   useEffect(() => {
     async function fetchData() {
       if (!isLoaded) return
-      
+
       if (!user?.primaryEmailAddress?.emailAddress) {
         setIsLoading(false)
         return
@@ -197,7 +256,9 @@ export default function HomePage() {
 
         // Fetch assigned agents
         const agentsRes = await fetch(
-          `${API_BASE}/admin/selected-agents?email=${encodeURIComponent(userEmail)}`,
+          `${API_BASE}/admin/selected-agents?email=${encodeURIComponent(
+            userEmail
+          )}`,
           { cache: "no-store" }
         )
         if (agentsRes.ok) {
@@ -233,25 +294,27 @@ export default function HomePage() {
     setIsModalLoading(true)
 
     try {
-      const response = await fetch(`${API_BASE}/admin/groups/${group.id}/agents`)
-      
+      const response = await fetch(
+        `${API_BASE}/admin/groups/${group.id}/agents`
+      )
+
       if (response.ok) {
         const groupData: GroupAgentsResponse = await response.json()
-        
+
         console.log("[v0] Group data:", groupData)
-        
+
         // Update the selected group with the name from the API
         setSelectedGroup({
           ...group,
           name: groupData.group.name,
         })
-        
+
         // Map agent IDs to full agent objects
         const agentIds = groupData.agents
         const matchedAgents = agents.filter((agent) =>
           agentIds.includes(agent.key)
         )
-        
+
         console.log("[v0] Matched agents:", matchedAgents)
         setGroupAgents(matchedAgents)
       } else {
@@ -299,15 +362,15 @@ export default function HomePage() {
         {/* Header Section */}
         <header className="relative mb-8 rounded-lg bg-[#235E84] px-4 py-6 text-center shadow-sm sm:mb-10 sm:rounded-xl sm:px-6 sm:py-8 md:mb-12 md:px-8 md:py-10 lg:px-10">
           <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
-            <UserButton 
+            <UserButton
               appearance={{
                 elements: {
-                  avatarBox: "h-10 w-10 sm:h-12 sm:w-12"
-                }
+                  avatarBox: "h-10 w-10 sm:h-12 sm:w-12",
+                },
               }}
             />
           </div>
-          
+
           <h1 className="mb-2 font-sans text-2xl font-bold leading-tight text-white sm:text-3xl md:text-4xl lg:text-[36px]">
             Incontra i tuoi Specialisti AI
           </h1>
