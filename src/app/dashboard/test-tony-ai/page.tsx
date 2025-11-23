@@ -1,1224 +1,1162 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useState, useEffect, useRef } from "react";
+import { 
+  Home, MoreVertical, Edit2, Trash2, Check, Copy, Sun, Moon, Zap, 
+  MessageSquare, User, Send, Paperclip, ChevronRight, Users, LayoutGrid, 
+  ChevronLeft, BrainCircuit, Activity, Sparkles, FolderPlus, Folder, 
+  FolderOpen, ChevronDown, MoreHorizontal, Share, Archive, X, RotateCcw, 
+  FileText, Image as ImageIcon, ExternalLink, Menu 
+} from 'lucide-react';
 
-import { useState, useEffect, useRef } from "react"
-import Link from "next/link"
-import { UserButton } from "@clerk/nextjs"
-import { Home } from "lucide-react"
-import { marked } from "marked"
+// --- CONSTANTS ---
+const USER_AVATAR = "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg";
 
-interface Message {
-  text: string
-  sender: "ai" | "user"
-  time: string
-}
+// --- ROBUST MARKDOWN SHIM v4 ---
+const simpleMarkdown = {
+  parse: (text) => {
+    if (!text) return '';
 
-interface Chat {
-  messages: Message[]
-  lastUpdated: string
-  title: string
-}
+    // 1. Helper: Inline Formatting (Bold, Italic, Code, Links)
+    const formatInline = (str) => {
+      return str
+        // Explicit Bold (**text**) -> Bright White
+        .replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>')
+        .replace(/__([\s\S]*?)__/g, '<strong class="font-bold text-slate-900 dark:text-white">$1</strong>')
+        // Italic (*text*)
+        .replace(/\*([\s\S]*?)\*/g, '<em class="italic opacity-90">$1</em>')
+        .replace(/_([\s\S]*?)_/g, '<em class="italic opacity-90">$1</em>')
+        // Code
+        .replace(/`([^`]+)`/g, '<code class="bg-black/20 px-1 rounded font-mono text-xs">$1</code>')
+        // Links
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-sky-400 hover:underline">$1</a>');
+    };
 
-export default function TonyAIPage() {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [chats, setChats] = useState<{ [key: string]: Chat }>({})
-  const [currentChatId, setCurrentChatId] = useState("default")
-  const [sidebarVisible, setSidebarVisible] = useState(true)
-  const [useMemory, setUseMemory] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const CURRENT_NAMESPACE = useRef("")
+    // 2. Helper: Auto-Bold Headers (e.g. "STRATEGIA: text")
+    const autoBold = (str) => {
+        // Pattern: Start of line, uppercase/titlecase words, colon. 
+        const match = str.match(/^([A-ZÀ-ÖØ-Þ0-9\s&/-]{3,}:)(.*)/);
+        if (match) {
+            return `<strong class="font-bold text-slate-900 dark:text-white">${match[1]}</strong>${formatInline(match[2])}`;
+        }
+        return formatInline(str);
+    };
 
-  const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/53b24a5e-80c2-4a41-8755-59f37ba751dc/chat"
+    const lines = text.split('\n');
+    let output = '';
+    let tableBuffer = [];
+    let inList = false;
 
+    const flushTable = () => {
+        if (tableBuffer.length === 0) return;
+        
+        // Basic validation
+        if (tableBuffer.length < 2) {
+            tableBuffer.forEach(line => {
+                output += `<div class="mb-1">${formatInline(line)}</div>`;
+            });
+            tableBuffer = [];
+            return;
+        }
+
+        let html = '<div class="overflow-x-auto my-3 rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5"><table class="w-full text-left border-collapse text-xs">';
+        
+        // Header
+        const headerCells = tableBuffer[0].split('|').filter(c => c.trim()).map(c => c.trim());
+        html += '<thead class="bg-slate-100 dark:bg-white/10"><tr>';
+        headerCells.forEach(cell => {
+            html += `<th class="p-2 border-b border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-white">${formatInline(cell)}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        // Body
+        for (let i = 2; i < tableBuffer.length; i++) {
+            const rowCells = tableBuffer[i].split('|').filter(c => c.trim()).map(c => c.trim());
+            html += '<tr class="border-b border-slate-200 dark:border-white/5 last:border-0 hover:bg-slate-100/50 dark:hover:bg-white/5">';
+            rowCells.forEach(cell => {
+                html += `<td class="p-2 opacity-90">${formatInline(cell)}</td>`;
+            });
+            html += '</tr>';
+        }
+        html += '</tbody></table></div>';
+        
+        output += html;
+        tableBuffer = [];
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Table Detection
+        if (line.startsWith('|') && line.endsWith('|')) {
+            if (inList) { output += '</ul>'; inList = false; }
+            tableBuffer.push(line);
+            continue;
+        }
+        flushTable();
+
+        // List Detection
+        if (line.match(/^[-*]\s/)) {
+            if (!inList) { output += '<ul class="list-disc ml-4 my-2 space-y-1">'; inList = true; }
+            const content = line.replace(/^[-*]\s+/, '');
+            output += `<li>${autoBold(content)}</li>`; 
+            continue;
+        }
+        
+        // Close list if we hit non-list line (and it's not empty)
+        if (inList && line !== '') { output += '</ul>'; inList = false; }
+
+        // Standard Text
+        if (line === '') {
+            output += '<div class="h-2"></div>';
+        } else if (line.startsWith('### ')) {
+            output += `<h3 class="text-lg font-bold mt-3 mb-1 text-slate-800 dark:text-white">${formatInline(line.replace(/^###\s/, ''))}</h3>`;
+        } else if (line.startsWith('## ')) {
+            output += `<h2 class="text-xl font-bold mt-4 mb-2 border-b border-white/10 pb-1 text-slate-800 dark:text-white">${formatInline(line.replace(/^##\s/, ''))}</h2>`;
+        } else {
+            output += `<div class="mb-1 leading-relaxed">${autoBold(line)}</div>`;
+        }
+    }
+    
+    flushTable();
+    if (inList) output += '</ul>';
+
+    return output;
+  }
+};
+
+// --- AGENT DATABASE ---
+const AGENTS_DB = {
+  "tony-ai": {
+    name: "Tony AI",
+    role: "Sales Advisor",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
+    description: "Il tuo consulente vendite digitale con 30 anni di esperienza. Analizzo i dati e ottimizzo il funnel.",
+    primaryColor: "#0ea5e9", 
+    accentColor: "#22d3ee"
+  },
+  "mike-ai": {
+    name: "Mike AI",
+    role: "Marketing Manager",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
+    description: "Il tuo stratega di marketing. Definisco funnel e strategie integrate per scalare il business.",
+    primaryColor: "#3b82f6",
+    accentColor: "#60a5fa"
+  },
+  "lara-ai": {
+    name: "Lara AI",
+    role: "Social Media Mgr",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png",
+    description: "Gestisco i tuoi social media, creo calendari editoriali e massimizzo l'engagement.",
+    primaryColor: "#ec4899",
+    accentColor: "#f472b6"
+  },
+  "simone-ai": {
+    name: "Simone AI",
+    role: "SEO Copywriter",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png",
+    description: "Scrivo contenuti ottimizzati SEO che scalano le classifiche di Google e attraggono traffico.",
+    primaryColor: "#10b981",
+    accentColor: "#34d399"
+  },
+  "niko-ai": {
+    name: "Niko AI",
+    role: "SEO Strategist",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI.png",
+    description: "Architetto della tua presenza online. Analizzo il sito e pianifico la strategia SEO tecnica.",
+    primaryColor: "#f59e0b",
+    accentColor: "#fbbf24"
+  },
+  "valentina-ai": {
+    name: "Valentina AI",
+    role: "SEO Optimizer",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/03/Valentina-AI-AI-SEO-optimizer.png",
+    description: "Ottimizzo i contenuti esistenti per massimizzare il posizionamento e il CTR.",
+    primaryColor: "#8b5cf6",
+    accentColor: "#a78bfa"
+  },
+  "alex-ai": {
+    name: "Alex AI",
+    role: "Ads Specialist",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png",
+    description: "Gestisco le tue campagne pubblicitarie su Meta, Google e LinkedIn per il massimo ROI.",
+    primaryColor: "#ef4444",
+    accentColor: "#f87171"
+  },
+  "aladino-ai": {
+    name: "Aladino AI",
+    role: "New Products",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
+    description: "Invento nuovi prodotti e servizi ad alta marginalità per differenziarti sul mercato.",
+    primaryColor: "#6366f1",
+    accentColor: "#818cf8"
+  },
+  "jim-ai": {
+    name: "Jim AI",
+    role: "Sales Coach",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-%E2%80%93-AI-Coach.png",
+    description: "Alleno il tuo team di vendita con simulazioni e role-play per chiudere più contratti.",
+    primaryColor: "#f97316",
+    accentColor: "#fb923c"
+  }
+};
+
+// --- AGENT ROSTER LIST ---
+const AI_TEAM_LIST = [
+    { id: "mike-ai", href: "#" },
+    { id: "tony-ai", href: "#" },
+    { id: "lara-ai", href: "#" },
+    { id: "simone-ai", href: "#" },
+    { id: "niko-ai", href: "#" },
+    { id: "valentina-ai", href: "#" },
+    { id: "alex-ai", href: "#" },
+    { id: "aladino-ai", href: "#" },
+    { id: "jim-ai", href: "#" },
+];
+
+// --- MOCK USER BUTTON (Header - Icon Version) ---
+const MockUserButton = () => (
+  <button className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-sky-400/50 hover:ring-sky-400 transition-all shadow-[0_0_15px_rgba(14,165,233,0.6)] group">
+    <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+        <User size={20} className="text-sky-200" />
+    </div>
+  </button>
+);
+
+export default function App() {
+  // --- STATE ---
+  const [activeAgentId, setActiveAgentId] = useState("tony-ai");
+  const currentAgent = AGENTS_DB[activeAgentId] || AGENTS_DB["tony-ai"];
+
+  const [messages, setMessages] = useState([]);
+  
+  const [inputValue, setInputValue] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [sidebarMode, setSidebarMode] = useState('chats');
+  const [useMemory, setUseMemory] = useState(true);
+  const [chats, setChats] = useState({});
+  const [currentChatId, setCurrentChatId] = useState("default");
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [renamingChat, setRenamingChat] = useState(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [pinnedChats, setPinnedChats] = useState(new Set());
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState(null);
+  const [isDark, setIsDark] = useState(true);
+  
+  // Folder State
+  const [folders, setFolders] = useState([]);
+  const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const [draggedChatId, setDraggedChatId] = useState(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState(null);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+
+  // --- REFS ---
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const newFolderInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const CURRENT_NAMESPACE = useRef("");
+
+  const N8N_ENDPOINT = "https://n8n-c2lq.onrender.com/webhook/0c898053-01f4-494d-b013-165c8a9023d1/chat?action=sendMessage";
+
+  // --- INITIALIZATION ---
   useEffect(() => {
-    const generateUUID = () => {
-      return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-        const r = (Math.random() * 16) | 0
-        const v = c === "x" ? r : (r & 0x3) | 0x8
-        return v.toString(16)
-      })
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) setIsDark(savedTheme === 'dark');
+    else setIsDark(true);
+
+    // Mobile Responsive Check
+    if (window.innerWidth < 768) {
+        setSidebarVisible(false);
     }
 
-    let ns = localStorage.getItem("Namespace")
-    if (!ns) {
-      ns = generateUUID()
-      localStorage.setItem("Namespace", ns)
+    const generateUUID = () => "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0;
+        const v = c === "x" ? r : (r & 0x3) | 0x8;
+        return v.toString(16);
+      });
+
+    let namespace = localStorage.getItem("Namespace");
+    if (!namespace) {
+      namespace = generateUUID();
+      localStorage.setItem("Namespace", namespace);
     }
-    CURRENT_NAMESPACE.current = ns
+    CURRENT_NAMESPACE.current = namespace;
 
-    const storedChats = localStorage.getItem("tony-ai-chats")
-    if (storedChats) {
-      const parsedChats = JSON.parse(storedChats)
-      setChats(parsedChats)
-
-      const sortedChats = (Object.entries(parsedChats) as [string, Chat][]).sort(
-        ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
-      )
-
-      if (sortedChats.length > 0) {
-        const [chatId, chat] = sortedChats[0]
-        setCurrentChatId(chatId)
-        setMessages(chat.messages || [])
-      } else {
-        createInitialMessage()
+    const savedChats = localStorage.getItem("tony-ai-chats");
+    if (savedChats) {
+      try {
+        const parsedChats = JSON.parse(savedChats);
+        setChats(parsedChats);
+        if (Object.keys(parsedChats).length > 0) {
+          const sorted = Object.entries(parsedChats).sort(
+            ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
+          );
+          const recentChatId = sorted[0][0];
+          setCurrentChatId(recentChatId);
+          setMessages(parsedChats[recentChatId].messages || []);
+          if(parsedChats[recentChatId].agentId) {
+              setActiveAgentId(parsedChats[recentChatId].agentId);
+          }
+        } else {
+          initNewChatForAgent(currentAgent);
+        }
+      } catch (e) {
+        console.error("Failed to parse saved chats", e);
+        initNewChatForAgent(currentAgent);
       }
     } else {
-      createInitialMessage()
+        initNewChatForAgent(currentAgent);
     }
 
-    const storedMemory = localStorage.getItem("tony-ai-use-memory")
-    setUseMemory(storedMemory !== "false")
-
-    const storedSidebarVisible = localStorage.getItem("tony-ai-sidebar-visible")
-    setSidebarVisible(storedSidebarVisible !== "false")
-  }, [])
-
-  const createInitialMessage = () => {
-    const initialMessage: Message = {
-      text: "Ciao! Sono Tony AI, il tuo consulente vendite digitale con 30 anni di esperienza. Sono qui per aiutarti a migliorare le tue strategie di vendita e raggiungere i tuoi obiettivi commerciali. Come posso supportarti oggi?",
-      sender: "ai",
-      time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+    const savedFolders = localStorage.getItem("tony-ai-folders");
+    if (savedFolders) {
+        try {
+          setFolders(JSON.parse(savedFolders));
+        } catch(e) { console.error("Failed to parse folders", e)}
     }
-    setMessages([initialMessage])
-  }
+  }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    if (isDark) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem("theme", "dark");
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem("theme", "light");
+    }
+  }, [isDark]);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      saveCurrentChat()
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
     }
-  }, [messages])
+  }, [inputValue]);
 
-  const saveCurrentChat = (newTitle?: string) => {
-    if (messages.length === 0) return
-
-    let title = newTitle || chats[currentChatId]?.title || "Nuova Conversazione"
-    if (!newTitle) {
-      const firstUser = messages.find((m) => m.sender === "user")
-      if (firstUser) {
-        title = (firstUser.text || "Nuova Conversazione").slice(0, 40)
+  useEffect(() => {
+      if (isCreatingFolder && newFolderInputRef.current) {
+          newFolderInputRef.current.focus();
       }
-    }
+  }, [isCreatingFolder]);
 
-    const updatedChats = {
-      ...chats,
-      [currentChatId]: {
-        messages,
-        lastUpdated: new Date().toISOString(),
-        title,
-      },
-    }
-
-    setChats(updatedChats)
-    localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats))
+  // --- AGENT SWITCHING LOGIC ---
+  const switchAgent = (agentId) => {
+      setActiveAgentId(agentId);
+      const newAgent = AGENTS_DB[agentId];
+      
+      // 1. Open sidebar explicitly
+      setSidebarVisible(true); 
+      
+      // 2. Keep the AI Team tab open
+      // 3. Initialize new chat for this agent
+      initNewChatForAgent(newAgent, agentId);
   }
 
-  const loadChat = (chatId: string) => {
-    setCurrentChatId(chatId)
-    const chat = chats[chatId]
-    setMessages(chat.messages || [])
-  }
+  const initNewChatForAgent = (agent, specificAgentId) => {
+      const targetAgentId = specificAgentId || activeAgentId;
+      const newChatId = "chat_" + Date.now();
+      
+      let messageText = `Ciao! Sono **${agent.name}**. ${agent.description} Come posso aiutarti?`;
+      
+      // Custom Welcome Message for Tony AI
+      if (agent.name === "Tony AI") {
+          messageText = `Ciao! Sono **Tony AI**.
+Il tuo consulente vendite digitale con 30 anni di esperienza. Analizzo i dati e ottimizzo il funnel.
 
-  const deleteChat = (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm("Sei sicuro di voler eliminare questa conversazione?")) return
+30 anni di esperienza nel mondo commerciale. Sono qui per aiutarti a sviluppare strategie di vendita efficaci e implementare processi che massimizzino i tuoi risultati commerciali.
 
-    const updatedChats = { ...chats }
-    delete updatedChats[chatId]
-    setChats(updatedChats)
-    localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats))
+Posso supportarti in queste aree principali:
+- **STRATEGIA E ACQUISIZIONE**: Sviluppo di strategie commerciali, identificazione target ideale, lead generation e ottimizzazione del funnel di vendita.
+- **CUSTOMER MANAGEMENT**: Gestione clienti VIP, programmi di fidelizzazione, strategie di upsell/cross-sell e riduzione del churn.
+- **TEAM E PROCESSI**: Formazione team vendite, ottimizzazione CRM, creazione di script e gestione performance commerciali.
 
-    if (chatId === currentChatId) {
-      const remaining = Object.keys(updatedChats)
-      if (remaining.length > 0) {
-        loadChat(remaining[0])
-      } else {
-        createNewChat()
+Per poter sviluppare la strategia commerciale più efficace per te, ho bisogno che mi rispondi nel modo più preciso possibile ad alcune domande che chiameremo **'DOMANDE DI TONY AI'**. Disponi già di queste domande e delle relative risposte?
+
+In alternativa, preferisci una consulenza completa per sviluppare un sales plan strutturato, oppure vuoi concentrarti su una delle 3 aree specifiche sopra menzionate?`;
       }
-    }
+
+      const welcomeMsg = {
+        text: messageText,
+        sender: "ai",
+        time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+      };
+      
+      setCurrentChatId(newChatId);
+      setMessages([welcomeMsg]);
+      
+      setChats(prev => {
+          const newChat = {
+              messages: [welcomeMsg],
+              title: `Missione con ${agent.name}`, 
+              lastUpdated: new Date().toISOString(),
+              folderId: null,
+              archived: false,
+              agentId: targetAgentId
+          };
+          const newChats = { [newChatId]: newChat, ...prev }; 
+          localStorage.setItem("tony-ai-chats", JSON.stringify(newChats));
+          return newChats;
+      });
   }
+
+  // --- CHAT STATE HELPER ---
+  const updateChatState = (chatId, updates) => {
+      setChats(prev => {
+          const existing = prev[chatId] || { 
+              messages: [], 
+              lastUpdated: new Date().toISOString(), 
+              title: "Nuova Missione", 
+              folderId: null, 
+              archived: false, 
+              agentId: activeAgentId 
+          };
+          const updatedChat = { ...existing, ...updates };
+          const newChats = { ...prev, [chatId]: updatedChat };
+          localStorage.setItem("tony-ai-chats", JSON.stringify(newChats));
+          return newChats;
+      });
+  };
 
   const createNewChat = () => {
-    const newChatId = "chat_" + Date.now()
-    setCurrentChatId(newChatId)
-    localStorage.setItem("tony-ai-session-id", newChatId)
-    createInitialMessage()
+    initNewChatForAgent(currentAgent);
+    setSidebarVisible(true); 
+    setSidebarMode('chats');
   }
 
-  const formatMessageText = (text: string) => {
-    if (!text) return ""
+  const loadChat = (chatId) => {
+    if (!chats[chatId]) return;
+    setCurrentChatId(chatId);
+    setMessages(chats[chatId].messages || []);
+    if (chats[chatId].agentId && chats[chatId].agentId !== activeAgentId) {
+        setActiveAgentId(chats[chatId].agentId);
+    }
+    setActiveMenu(null);
+    // Close sidebar on mobile when a chat is selected
+    if (window.innerWidth < 768) {
+        setSidebarVisible(false);
+    }
+  }
 
-    // Detect if text contains a markdown table
-    const hasTable = /\|.*\|.*\n\s*\|[\s\-:]+\|/m.test(text)
-
-    if (hasTable) {
-      // Use marked for table rendering
-      try {
-        marked.setOptions({
-          gfm: true,
-          breaks: true,
-        })
-        return marked.parse(text) as string
-      } catch (e) {
-        console.error("Marked parsing error:", e)
+  // --- FOLDER LOGIC ---
+  const confirmCreateFolder = () => {
+      if (!newFolderName.trim()) {
+          setIsCreatingFolder(false);
+          return;
       }
+      const newFolder = { id: `folder_${Date.now()}`, name: newFolderName };
+      const updatedFolders = [...folders, newFolder];
+      setFolders(updatedFolders);
+      localStorage.setItem("tony-ai-folders", JSON.stringify(updatedFolders));
+      setExpandedFolders(prev => new Set(prev).add(newFolder.id));
+      setIsCreatingFolder(false);
+      setNewFolderName("");
+  }
+
+  const cancelCreateFolder = () => {
+      setIsCreatingFolder(false);
+      setNewFolderName("");
+  }
+
+  const startCreateFolder = () => {
+      setIsCreatingFolder(true);
+      setNewFolderName("");
+  }
+
+  const toggleFolder = (folderId) => {
+      setExpandedFolders(prev => {
+          const next = new Set(prev);
+          if (next.has(folderId)) next.delete(folderId);
+          else next.add(folderId);
+          return next;
+      });
+  }
+
+  const deleteFolder = (folderId, e) => {
+      e.stopPropagation();
+      if (!confirm("Eliminare cartella? Le chat torneranno nella lista principale.")) return;
+      
+      const updatedChats = { ...chats };
+      Object.keys(updatedChats).forEach(key => {
+          if (updatedChats[key].folderId === folderId) {
+              updatedChats[key].folderId = null;
+          }
+      });
+      setChats(updatedChats);
+      localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats));
+
+      const updatedFolders = folders.filter(f => f.id !== folderId);
+      setFolders(updatedFolders);
+      localStorage.setItem("tony-ai-folders", JSON.stringify(updatedFolders));
+  }
+
+  // --- CONTEXT MENU ACTIONS (FIXED DELETE) ---
+  const deleteChat = (chatIdToDelete, e) => {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
     }
 
-    // Basic formatting for non-table content
-    let formatted = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    formatted = formatted.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    formatted = formatted.replace(/\*(.+?)\*/g, "<em>$1</em>")
-    formatted = formatted.replace(
-      /`([^`]+?)`/g,
-      '<code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>',
-    )
-    formatted = formatted.replace(
-      /\[([^\]]+?)\]$$(https?:\/\/[^\s)]+)$$/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #235E84; text-decoration: underline;">$1</a>',
-    )
-    formatted = formatted.replace(/\n/g, "<br>")
-    return formatted
+    // Close menu first to prevent UI glitches
+    setActiveMenu(null);
+    
+    if (!confirm("Sei sicuro di voler eliminare questa chat?")) return;
+    
+    // 1. Create deep copy to avoid reference issues
+    const updatedChats = { ...chats };
+    
+    // 2. Check if chat exists
+    if (!updatedChats[chatIdToDelete]) return;
+
+    // 3. Delete
+    delete updatedChats[chatIdToDelete];
+    
+    const remainingIds = Object.keys(updatedChats);
+
+    // CASE 1: List becomes EMPTY -> Force a fresh clean state
+    if (remainingIds.length === 0) {
+        const agent = AGENTS_DB[activeAgentId] || AGENTS_DB["tony-ai"];
+        const newChatId = "chat_" + Date.now();
+        const welcomeMsg = {
+            text: `Ciao! Sono **${agent.name}**. ${agent.description} Come posso aiutarti?`,
+            sender: "ai",
+            time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+        };
+        
+        const newChatState = {
+            [newChatId]: {
+                messages: [welcomeMsg],
+                title: `Missione con ${agent.name}`, 
+                lastUpdated: new Date().toISOString(),
+                folderId: null,
+                archived: false,
+                agentId: activeAgentId
+            }
+        };
+        
+        // Write to storage AND state immediately
+        localStorage.setItem("tony-ai-chats", JSON.stringify(newChatState));
+        setChats(newChatState);
+        setCurrentChatId(newChatId);
+        setMessages([welcomeMsg]);
+    } 
+    // CASE 2: List NOT empty -> Standard delete logic
+    else {
+        localStorage.setItem("tony-ai-chats", JSON.stringify(updatedChats));
+        
+        // IMPORTANT: Switch active chat BEFORE setting state if needed
+        if (chatIdToDelete === currentChatId) {
+             const sorted = remainingIds.sort((a,b) => {
+                 const timeA = new Date(updatedChats[a].lastUpdated).getTime() || 0;
+                 const timeB = new Date(updatedChats[b].lastUpdated).getTime() || 0;
+                 return timeB - timeA;
+             });
+             const nextId = sorted[0];
+             setCurrentChatId(nextId);
+             setMessages(updatedChats[nextId].messages || []);
+        }
+        
+        setChats(updatedChats);
+    }
+  }
+
+  const archiveChat = (chatId) => {
+      updateChatState(chatId, { archived: !chats[chatId]?.archived });
+      setActiveMenu(null);
+  }
+
+  const shareChat = (chatId) => {
+      const url = `${window.location.origin}/chat/${chatId}`;
+      navigator.clipboard.writeText(url);
+      alert("Link copiato negli appunti: " + url);
+      setActiveMenu(null);
+  }
+
+  const startRenaming = (chatId) => {
+    setRenamingChat(chatId);
+    setRenameValue(chats[chatId]?.title || "");
+    setActiveMenu(null);
+  }
+
+  const confirmRename = (chatId) => {
+    if (!renameValue.trim()) {
+      setRenamingChat(null);
+      return;
+    }
+    updateChatState(chatId, { title: renameValue.trim() });
+    setRenamingChat(null);
+    setRenameValue("");
+  }
+
+  // --- DRAG & DROP LOGIC ---
+  const handleDragStart = (e, chatId) => {
+      e.dataTransfer.setData("chatId", chatId);
+      setDraggedChatId(chatId);
+  }
+
+  const handleDragOver = (e, folderId) => {
+      e.preventDefault();
+      setDragOverFolderId(folderId);
+  }
+
+  const handleDrop = (e, targetFolderId) => {
+      e.preventDefault();
+      setDragOverFolderId(null);
+      const chatId = e.dataTransfer.getData("chatId");
+      if (!chatId || !chats[chatId]) return;
+      if (chats[chatId].folderId === targetFolderId) return;
+
+      updateChatState(chatId, { folderId: targetFolderId });
+      
+      if (targetFolderId) {
+          setExpandedFolders(prev => new Set(prev).add(targetFolderId));
+      }
+      setDraggedChatId(null);
+  }
+
+  // --- MESSAGING ---
+  const formatMessageText = (text) => {
+    if (!text) return '';
+    try {
+      // We trust our simpleMarkdown shim now
+      return simpleMarkdown.parse(text);
+    } catch (e) { return text }
   }
 
   const sendMessage = async () => {
-    if (!input.trim() || isLoading) return
-
-    const userMessage: Message = {
-      text: input.trim(),
-      sender: "user",
-      time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
-    setInput("")
-    setIsLoading(true)
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"
-    }
-
-    const thinkingMessage: Message = {
-      text: "...",
-      sender: "ai",
-      time: "",
-    }
-    setMessages((prev) => [...prev, thinkingMessage])
+    if (!inputValue.trim() && selectedFiles.length === 0) return;
+    
+    const userMessage = { 
+        text: inputValue, 
+        sender: "user", 
+        time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+        files: selectedFiles.map(f => f.name)
+    };
+    
+    // 1. Update State & Persist User Message
+    setMessages((prev) => {
+        const newMsgs = [...prev, userMessage];
+        updateChatState(currentChatId, { 
+            messages: newMsgs, 
+            lastUpdated: new Date().toISOString(), 
+            title: chats[currentChatId]?.title || (inputValue.slice(0, 30) || "Nuova Missione") 
+        });
+        return newMsgs;
+    });
+    
+    setInputValue("");
+    setSelectedFiles([]);
+    setIsLoading(true);
+    
+    setMessages((prev) => [...prev, { text: "...", sender: "ai", time: "", raw: "" }]);
 
     try {
-      const sessionId = localStorage.getItem("tony-ai-session-id") || "session_" + Date.now()
-      localStorage.setItem("tony-ai-session-id", sessionId)
-
+      const sessionId = localStorage.getItem("tony-ai-session-id") || "session_" + Date.now();
+      
       const response = await fetch(N8N_ENDPOINT, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          chatInput: userMessage.text,
+          chatInput: inputValue + (selectedFiles.length ? ` [Attached: ${selectedFiles.map(f => f.name).join(', ')}]` : ''),
           sessionId: sessionId,
           useMemory: useMemory,
-          metadata: { namespace: CURRENT_NAMESPACE.current, source: "tony-ai-chat" },
+          metadata: { namespace: CURRENT_NAMESPACE.current, source: activeAgentId },
         }),
-      })
+      });
 
-      if (!response.ok) throw new Error("HTTP error " + response.status)
+      if (!response.body) throw new Error("No response");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let rawText = "";
+      let isFirstChunk = true;
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder("utf-8")
-      let buffer = ""
-      let rawText = ""
-      let streamMode: "sse" | "jsonl" | null = null
-      let generatedTitle: string | null = null
-
-      const handleEvent = (jsonStr: string) => {
-        try {
-          const obj = JSON.parse(jsonStr)
-          if (obj.type === "item" && typeof obj.content === "string") {
-            rawText += obj.content
-            setMessages((prev) => {
-              const newMessages = [...prev]
-              const lastMsg = newMessages[newMessages.length - 1]
-              if (lastMsg && lastMsg.sender === "ai") {
-                lastMsg.text = rawText
-                lastMsg.time = new Date().toLocaleTimeString("it-IT", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              }
-              return newMessages
-            })
-          } else if (obj.type === "end" && obj.title) {
-            generatedTitle = obj.title
-          }
-        } catch (e) {
-          // Ignore parse errors
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+            const trimmed = line.replace(/^data:\s?/, "").trim();
+            if (!trimmed) continue;
+            try {
+                const obj = JSON.parse(trimmed);
+                if (obj.type === 'item' && typeof obj.content === 'string') {
+                      if (isFirstChunk) {
+                         setMessages(prev => {
+                             const newMsgs = [...prev]; 
+                             newMsgs[newMsgs.length - 1] = { text: obj.content, sender: 'ai', time: '', raw: obj.content }; 
+                             return newMsgs;
+                         });
+                         isFirstChunk = false;
+                     } else {
+                         rawText += obj.content;
+                         setMessages(prev => {
+                             const newMsgs = [...prev]; 
+                             newMsgs[newMsgs.length - 1].text = rawText; 
+                             return newMsgs;
+                         });
+                     }
+                }
+            } catch (e) {}
         }
       }
-
-      while (reader) {
-        const { value, done } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        if (!streamMode) {
-          const probe = buffer.trimStart()
-          if (probe.startsWith("data:")) streamMode = "sse"
-          else if (probe.startsWith("{") || probe.startsWith("[")) streamMode = "jsonl"
-          else streamMode = "jsonl"
-        }
-
-        if (streamMode === "sse") {
-          let idx
-          while ((idx = buffer.indexOf("\n\n")) !== -1) {
-            const eventBlock = buffer.slice(0, idx)
-            buffer = buffer.slice(idx + 2)
-            const dataLines = eventBlock.split("\n").filter((l) => l.startsWith("data:"))
-            if (dataLines.length) {
-              const jsonStr = dataLines
-                .map((l) => l.replace(/^data:\s?/, ""))
-                .join("\n")
-                .trim()
-              if (jsonStr) handleEvent(jsonStr)
-            }
-          }
-        } else {
-          const lines = buffer.split(/\r?\n/)
-          buffer = lines.pop() || ""
-          for (const line of lines) {
-            const trimmed = line.trim()
-            if (trimmed) handleEvent(trimmed)
-          }
-        }
-      }
-
-      const leftover = buffer.trim()
-      if (leftover) {
-        if (streamMode === "sse") {
-          const dataLines = leftover.split("\n").filter((l) => l.startsWith("data:"))
-          if (dataLines.length) {
-            const jsonStr = dataLines
-              .map((l) => l.replace(/^data:\s?/, ""))
-              .join("\n")
-              .trim()
-            if (jsonStr) handleEvent(jsonStr)
-          }
-        } else {
-          handleEvent(leftover)
-        }
-      }
-
-      setMessages((prev) => {
-        const newMessages = [...prev]
-        const lastMsg = newMessages[newMessages.length - 1]
-        if (lastMsg && lastMsg.sender === "ai" && lastMsg.text === "...") {
-          lastMsg.text = "Mi dispiace, non ho ricevuto una risposta valida. Riprova per favore."
-          lastMsg.time = new Date().toLocaleTimeString("it-IT", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        }
-        return newMessages
-      })
-
-      if (generatedTitle) {
-        saveCurrentChat(generatedTitle)
-      }
+      
+      // 2. Final Persistence of AI Response
+      setMessages(prev => {
+        const newMsgs = [...prev]; 
+        newMsgs[newMsgs.length - 1].time = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+        if(!newMsgs[newMsgs.length - 1].text || newMsgs[newMsgs.length - 1].text === "...") newMsgs[newMsgs.length - 1].text = "Risposta completata.";
+        
+        updateChatState(currentChatId, { messages: newMsgs, lastUpdated: new Date().toISOString() });
+        return newMsgs;
+      });
+      
     } catch (error) {
-      console.error("Error sending message:", error)
-      setMessages((prev) => {
-        const newMessages = [...prev]
-        const lastMsg = newMessages[newMessages.length - 1]
-        if (lastMsg && lastMsg.sender === "ai") {
-          lastMsg.text = "Errore di connessione. Riprova più tardi."
-          lastMsg.time = new Date().toLocaleTimeString("it-IT", {
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        }
-        return newMessages
-      })
+      console.error(error);
+      setMessages(prev => {
+         const newMsgs = [...prev]; 
+         // Don't overwrite if we already have some text
+         if (newMsgs[newMsgs.length - 1].text === "...") {
+            newMsgs[newMsgs.length - 1].text = "Errore di connessione. Il server n8n potrebbe non essere raggiungibile.";
+         }
+         return newMsgs;
+      });
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
-  }
+  const sortedChats = Object.entries(chats).sort(([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
-    e.target.style.height = "auto"
-    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+  // --- FILE HANDLERS ---
+  const handleUploadClick = () => fileInputRef.current?.click();
+  const handleFileChange = (e) => {
+      if (e.target.files?.length) setSelectedFiles(prev => [...prev, ...Array.from(e.target.files)]);
   }
-
-  const sortedChats = (Object.entries(chats) as [string, Chat][]).sort(
-    ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
-  )
+  const removeFile = (index) => {
+      setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  }
 
   return (
     <>
-      <style jsx global>{`
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
+      <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 
-        body {
-          font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      <style>{`
+        :root {
+            --brand-dark: #020617;
+            --brand-primary: #0ea5e9;
+            --font-tech: 'Rajdhani', sans-serif;
         }
+        body { font-family: var(--font-tech); background-color: #f8fafc; color: #0f172a; overflow: hidden; }
+        .dark body { background-color: var(--brand-dark); color: #f8fafc; }
+        
+        /* GLASSMORPHISM */
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05); }
+        .dark .glass-panel { background: rgba(2, 6, 23, 0.85); border: 1px solid rgba(14, 165, 233, 0.15); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
 
-        ::-webkit-scrollbar {
-          width: 8px;
-          height: 8px;
-        }
+        /* ANIMATIONS */
+        @keyframes brain-float { 0% { transform: translateY(0px); } 50% { transform: translateY(-6px); } 100% { transform: translateY(0px); } }
+        .animate-float { animation: brain-float 6s ease-in-out infinite; }
+        
+        @keyframes brain-wave-flow { 0% { background-position: 0% 50%; opacity: 0.2; } 50% { background-position: 100% 50%; opacity: 0.5; } 100% { background-position: 0% 50%; opacity: 0.2; } }
+        .brainwave-overlay { background: linear-gradient(90deg, transparent, rgba(14,165,233,0.3), transparent, rgba(34,211,238,0.3), transparent); background-size: 200% 100%; animation: brain-wave-flow 3s linear infinite; pointer-events: none; }
 
-        ::-webkit-scrollbar-track {
-          background: #f1f5f9;
-        }
+        @keyframes synapse-pulse { 0% { box-shadow: 0 -10px 40px rgba(14,165,233,0.1); border-top-color: rgba(14,165,233,0.3); } 50% { box-shadow: 0 -20px 60px rgba(14,165,233,0.4); border-top-color: rgba(14,165,233,0.8); } 100% { box-shadow: 0 -10px 40px rgba(14,165,233,0.1); border-top-color: rgba(14,165,233,0.3); } }
+        .synapse-active { animation: synapse-pulse 1.5s ease-in-out infinite; position: relative; }
 
-        ::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 4px;
+        @keyframes neural-grid-move { 0% { transform: translateY(0); } 100% { transform: translateY(50px); } }
+        .neural-grid-active { 
+            background-image: linear-gradient(0deg, transparent 24%, rgba(14, 165, 233, 0.05) 25%, rgba(14, 165, 233, 0.05) 26%, transparent 27%, transparent 74%, rgba(14, 165, 233, 0.05) 75%, rgba(14, 165, 233, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(14, 165, 233, 0.05) 25%, rgba(14, 165, 233, 0.05) 26%, transparent 27%, transparent 74%, rgba(14, 165, 233, 0.05) 75%, rgba(14, 165, 233, 0.05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            animation: neural-grid-move 3s linear infinite;
         }
+        
+        @keyframes synapse-beam { 0% { opacity: 0; transform: translateY(20px) scale(0.8); } 50% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-20px) scale(1.2); } }
+        .synapse-beam::before { content: ''; position: absolute; width: 100%; height: 100%; top: 0; left: 0; background: radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%); animation: synapse-beam 2s infinite; pointer-events: none; z-index: -1; }
 
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8;
+        /* MARKDOWN TABLES */
+        .markdown-body table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 1.5em 0; border-radius: 12px; overflow: hidden; border: 1px solid rgba(148, 163, 184, 0.2); font-size: 0.95em; }
+        .dark .markdown-body table { border-color: rgba(30, 41, 59, 0.8); }
+        .markdown-body th { background-color: #f1f5f9; color: #334155; font-weight: 700; text-align: left; padding: 12px 16px; border-bottom: 2px solid rgba(148, 163, 184, 0.3); }
+        .dark .markdown-body th { background-color: #1e293b; color: #cbd5e1; border-bottom-color: rgba(51, 65, 85, 0.8); }
+        .markdown-body td { padding: 12px 16px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); }
+        .dark .markdown-body td { border-bottom-color: rgba(51, 65, 85, 0.4); }
+        .markdown-body tr:nth-child(even) { background-color: rgba(241, 245, 249, 0.4); }
+        .dark .markdown-body tr:nth-child(even) { background-color: rgba(30, 41, 59, 0.3); }
+        
+        /* General Markdown */
+        .markdown-body p { margin-bottom: 1.25em; line-height: 1.6; }
+        .markdown-body strong { font-weight: 700; color: inherit; }
+        .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.25em; }
+        
+        /* Button Pulse */
+        .btn-electric {
+           background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+           box-shadow: 0 0 15px rgba(14,165,233,0.5);
+           transition: all 0.3s ease;
         }
-
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+        .btn-electric:hover {
+           box-shadow: 0 0 25px rgba(14,165,233,0.8);
+           transform: translateY(-1px);
         }
-
-        @keyframes typing {
-          0%,
-          60%,
-          100% {
-            transform: translateY(0);
-            opacity: 0.4;
-          }
-          30% {
-            transform: translateY(-10px);
-            opacity: 1;
-          }
-        }
-
-        /* Table styling for markdown tables */
-        .tony-message-content table {
-          width: 100% !important;
-          display: table !important;
-          border-collapse: collapse !important;
-          margin: 16px 0 !important;
-          font-size: 14px !important;
-          background-color: #ffffff !important;
-          color: #1e293b !important;
-          border-radius: 8px !important;
-          overflow: hidden !important;
-          border: 2px solid #235E84 !important;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        }
-
-        .tony-message-content th {
-          background-color: #235E84 !important;
-          color: #ffffff !important;
-          padding: 12px 15px !important;
-          text-align: left !important;
-          font-weight: 700 !important;
-          border-bottom: 2px solid #1a4c6e !important;
-        }
-
-        .tony-message-content td {
-          background-color: #ffffff !important;
-          color: #334155 !important;
-          padding: 12px 15px !important;
-          border-bottom: 1px solid #e2e8f0 !important;
-          border-right: 1px solid #e2e8f0 !important;
-          line-height: 1.5 !important;
-        }
-
-        .tony-message-content tr:nth-child(even) td {
-          background-color: #f8fafc !important;
-        }
-
-        .tony-message-content tr:last-child td {
-          border-bottom: none !important;
-        }
-
-        /* User message table styles */
-        .tony-message.user .tony-message-content table {
-          background-color: rgba(255,255,255,0.1) !important;
-          border-color: rgba(255,255,255,0.3) !important;
-        }
-
-        .tony-message.user .tony-message-content th {
-          background-color: rgba(255,255,255,0.2) !important;
-          color: #ffffff !important;
-        }
-
-        .tony-message.user .tony-message-content td {
-          background-color: transparent !important;
-          color: #ffffff !important;
-          border-color: rgba(255,255,255,0.2) !important;
-        }
-
-        .tony-message.user .tony-message-content tr:nth-child(even) td {
-          background-color: rgba(255,255,255,0.05) !important;
-        }
-
-        @media (max-width: 1024px) {
-          .sidebar {
-            width: 280px !important;
-            min-width: 280px !important;
-          }
-          .chat-messages {
-            padding: 30px 40px !important;
-          }
-          .input-container {
-            padding: 20px 40px !important;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .sidebar {
-            position: fixed !important;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            z-index: 1000;
-            transform: translateX(-100%);
-            box-shadow: none;
-          }
-          .sidebar.visible {
-            transform: translateX(0);
-            box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
-          }
-          .chat-header {
-            padding: 16px 20px !important;
-            min-height: 70px !important;
-          }
-          .chat-header-title {
-            font-size: 16px !important;
-          }
-          .chat-messages {
-            padding: 20px 16px !important;
-          }
-          .message-container {
-            max-width: 100% !important;
-          }
-          .input-container {
-            padding: 16px !important;
-          }
-          .hamburger-menu {
-            display: flex !important;
-          }
-          .desktop-toggle {
-            display: none !important;
-          }
-          .close-sidebar-btn {
-            display: flex !important;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .chat-header {
-            padding: 12px 16px !important;
-            min-height: 60px !important;
-          }
-          .chat-header-title {
-            font-size: 14px !important;
-          }
-          .sidebar-header {
-            padding: 16px !important;
-          }
-          .sidebar-title {
-            font-size: 18px !important;
-          }
-          .avatar-large {
-            width: 32px !important;
-            height: 32px !important;
-          }
-          .avatar-small {
-            width: 32px !important;
-            height: 32px !important;
-          }
-          .new-chat-btn {
-            padding: 12px 16px !important;
-            font-size: 13px !important;
-          }
-          .chat-messages {
-            padding: 16px 12px !important;
-          }
-          .message-bubble {
-            padding: 16px 18px !important;
-            font-size: 14px !important;
-          }
-          .input-container {
-            padding: 12px !important;
-          }
-        }
-
-        @media (max-width: 360px) {
-          .chat-header-title {
-            font-size: 12px !important;
-          }
-          .sidebar-title {
-            font-size: 16px !important;
-          }
-          .avatar-large {
-            width: 28px !important;
-            height: 28px !important;
-          }
-          .message-bubble {
-            padding: 14px 16px !important;
-            font-size: 13px !important;
-          }
-        }
-
-        .hamburger-menu {
-          display: none;
-        }
-
-        .close-sidebar-btn {
-          display: none;
-        }
+        
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 2px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(30, 41, 59, 0.5); }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(14, 165, 233, 0.5); }
       `}</style>
 
-      <div style={{ width: "100%", height: "100vh", display: "flex", overflow: "hidden", background: "#ffffff" }}>
-        {/* Sidebar */}
-        <div
-          className={`sidebar ${sidebarVisible ? "visible" : ""}`}
-          style={{
-            width: sidebarVisible ? "320px" : "0",
-            minWidth: sidebarVisible ? "320px" : "0",
-            background: "#ffffff",
-            borderRight: sidebarVisible ? "1px solid #e2e8f0" : "none",
-            display: "flex",
-            flexDirection: "column",
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            overflow: "hidden",
-          }}
-        >
-          {/* Sidebar Header */}
-          <div className="sidebar-header" style={{ padding: "20px", borderBottom: "1px solid #e2e8f0" }}>
-            <div
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "24px" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <div
-                  className="avatar-large"
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    background: "#235E84",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <img
-                    src="https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
-                    alt="Tony AI"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </div>
-                <div
-                  className="sidebar-title"
-                  style={{ fontFamily: "Montserrat, sans-serif", fontSize: "20px", fontWeight: 600, color: "#475569" }}
-                >
-                  Tony AI
-                </div>
-              </div>
-              <button
-                className="close-sidebar-btn"
-                onClick={() => {
-                  setSidebarVisible(false)
-                  localStorage.setItem("tony-ai-sidebar-visible", "false")
-                }}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#475569",
-                  cursor: "pointer",
-                  padding: "8px",
-                  borderRadius: "4px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "20px",
-                  lineHeight: 1,
-                }}
-                title="Chiudi menu"
-              >
-                ×
-              </button>
-            </div>
-
-            <button
-              onClick={createNewChat}
-              className="new-chat-btn"
-              style={{
-                background: "#235E84",
-                border: "none",
-                color: "#ffffff",
-                padding: "14px 20px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: 500,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                width: "100%",
-                transition: "all 0.2s ease",
-              }}
-            >
-              <span>+</span> Nuova Chat
-            </button>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingTop: "16px",
-                fontSize: "14px",
-                fontWeight: 500,
-                color: "#475569",
-              }}
-            >
-              <label htmlFor="memoryToggle">Usa Memoria</label>
-              <label style={{ position: "relative", display: "inline-block", width: "44px", height: "24px" }}>
-                <input
-                  type="checkbox"
-                  id="memoryToggle"
-                  checked={useMemory}
-                  onChange={(e) => {
-                    setUseMemory(e.target.checked)
-                    localStorage.setItem("tony-ai-use-memory", String(e.target.checked))
-                  }}
-                  style={{ opacity: 0, width: 0, height: 0 }}
-                />
-                <span
-                  style={{
-                    position: "absolute",
-                    cursor: "pointer",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: useMemory ? "#235E84" : "#ccc",
-                    transition: "0.4s",
-                    borderRadius: "24px",
-                  }}
-                >
-                  <span
-                    style={{
-                      position: "absolute",
-                      content: '""',
-                      height: "18px",
-                      width: "18px",
-                      left: "3px",
-                      bottom: "3px",
-                      background: "white",
-                      transition: "0.4s",
-                      borderRadius: "50%",
-                      transform: useMemory ? "translateX(20px)" : "translateX(0)",
-                    }}
-                  />
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Chat List */}
-          <div style={{ flex: "0 1 auto", maxHeight: "40%", overflowY: "auto", padding: "16px 20px", minHeight: 0 }}>
-            {sortedChats.map(([id, chat]) => {
-              const dateObj = new Date(chat.lastUpdated)
-              const monthNames = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
-              const formattedDate = `${dateObj.getDate()} ${monthNames[dateObj.getMonth()]} h. ${String(dateObj.getHours()).padStart(2, "0")}:${String(dateObj.getMinutes()).padStart(2, "0")}`
-
-              return (
-                <div
-                  key={id}
-                  onClick={() => loadChat(id)}
-                  style={{
-                    padding: "16px",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    marginBottom: "2px",
-                    background: id === currentChatId ? "#E3F2FD" : "transparent",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (id !== currentChatId) e.currentTarget.style.background = "#E3F2FD"
-                  }}
-                  onMouseLeave={(e) => {
-                    if (id !== currentChatId) e.currentTarget.style.background = "transparent"
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500, fontSize: "14px", color: "#475569", marginBottom: "4px" }}>
-                      {chat.title || "Nuova Conversazione"}
+      <div className={`flex h-screen w-full bg-tech-grid azure-glow-bg ${isDark ? 'dark' : ''}`}>
+        
+        {/* --- SIDEBAR --- */}
+        <div className={`glass-panel flex flex-col transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] z-40 
+                        ${sidebarVisible ? 'w-80 translate-x-0' : 'w-0 -translate-x-full opacity-0'} 
+                        fixed md:relative h-full border-r border-sky-100 dark:border-sky-900/30`}>
+            
+            {/* Sidebar Header */}
+            <div className="p-6 border-b border-sky-100 dark:border-sky-900/30 bg-gradient-to-b from-white/50 to-transparent dark:from-sky-900/20">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="relative group cursor-pointer">
+                            <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-sky-400 to-cyan-300 shadow-lg shadow-sky-400/20 group-hover:shadow-sky-400/50 transition-all duration-300">
+                                <img src={currentAgent.image} className="w-full h-full rounded-full object-cover bg-slate-900" alt={currentAgent.name} />
+                            </div>
+                            <div className="absolute bottom-0.5 right-0 w-3 h-3 bg-emerald-400 border-2 border-white dark:border-slate-900 rounded-full animate-pulse"></div>
+                        </div>
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-white tracking-wide font-tech">AI TEAM</h2>
                     </div>
-                    <div style={{ fontSize: "12px", color: "#64748b" }}>{formattedDate}</div>
-                  </div>
-                  <button
-                    onClick={(e) => deleteChat(id, e)}
-                    style={{
-                      background: "#ef4444",
-                      border: "none",
-                      color: "white",
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "4px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      transition: "all 0.2s ease",
-                    }}
-                    title="Elimina conversazione"
-                  >
-                    🗑
-                  </button>
+                    {/* Close Sidebar Button (Mobile/Desktop) */}
+                    <button onClick={() => setSidebarVisible(false)} className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition-colors md:hidden">
+                        <ChevronLeft size={20} />
+                    </button>
                 </div>
-              )
-            })}
-          </div>
 
-          {/* Agents Section */}
-          <div
-            style={{
-              flex: "1 1 auto",
-              minHeight: 0,
-              padding: "16px 20px",
-              borderTop: "1px solid #e2e8f0",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <h3
-              style={{
-                fontFamily: "Montserrat, sans-serif",
-                fontSize: "16px",
-                fontWeight: 600,
-                color: "#475569",
-                marginBottom: "16px",
-              }}
-            >
-              AGENTI AI:
-            </h3>
-            <div
-              style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", minHeight: 0 }}
-            >
-              {[
-                {
-                  name: "Tony AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
-                  href: "/dashboard/tony-ai",
-                },
-                {
-                  name: "Aladino AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
-                  href: "/dashboard/aladino-ai",
-                },
-                {
-                  name: "Lara AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Lara-AI-social-strategiest.png",
-                  href: "/dashboard/lara-ai",
-                },
-                {
-                  name: "Simone AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Simone-AI-seo-copy.png",
-                  href: "/dashboard/simone-ai",
-                },
-                {
-                  name: "Mike AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
-                  href: "/dashboard/mike-ai",
-                },
-                {
-                  name: "Alex AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png",
-                  href: "/dashboard/alex-ai",
-                },
-                {
-                  name: "Valentina AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Valentina-AI-email-marketing.png",
-                  href: "/dashboard/valentina-ai",
-                },
-                {
-                  name: "Niko AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Niko-AI-content-creator.png",
-                  href: "/dashboard/niko-ai",
-                },
-                {
-                  name: "Jim AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Jim-AI-podcast-expert.png",
-                  href: "/dashboard/jim-ai",
-                },
-                {
-                  name: "Daniele AI",
-                  img: "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
-                  href: "/dashboard/daniele-ai",
-                },
-              ].map((agent) => (
-                <Link
-                  key={agent.name}
-                  href={agent.href}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    textDecoration: "none",
-                    color: "#475569",
-                    transition: "background-color 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "#E3F2FD")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                {/* Electric Blue New Chat Button */}
+                <button 
+                    onClick={createNewChat}
+                    className="w-full py-3.5 px-4 btn-electric text-white font-bold rounded-xl flex items-center justify-center gap-2 uppercase tracking-wider text-sm border border-white/10"
                 >
-                  <div
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      overflow: "hidden",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <img
-                      src={agent.img || "/placeholder.svg"}
-                      alt={agent.name}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  </div>
-                  <span style={{ fontSize: "14px", fontWeight: 500 }}>{agent.name}</span>
-                </Link>
-              ))}
+                    <MessageSquare size={18} strokeWidth={2.5} /> Nuova Missione
+                </button>
             </div>
-          </div>
+
+            {/* Toggle Tabs (Chats / Agents) */}
+            <div className="flex p-2 gap-1 mx-4 mt-4 bg-slate-100/80 dark:bg-slate-900/50 rounded-xl border border-sky-200/50 dark:border-sky-700/30 shadow-inner">
+                <button 
+                    onClick={() => setSidebarMode('chats')}
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all flex items-center justify-center gap-2
+                    ${sidebarMode === 'chats' 
+                        ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30' 
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                >
+                    <LayoutGrid size={14} /> Missioni
+                </button>
+                <button 
+                    onClick={() => setSidebarMode('agents')}
+                    className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all flex items-center justify-center gap-2
+                    ${sidebarMode === 'agents' 
+                        ? 'bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30' 
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                >
+                    <Users size={14} /> AI Team
+                </button>
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-1 mt-2 custom-scrollbar"
+                 onDragOver={(e) => handleDragOver(e, null)} // Drop on Root
+                 onDrop={(e) => handleDrop(e, null)}
+            >
+                
+                {/* MODE: CHAT HISTORY WITH FOLDERS */}
+                {sidebarMode === 'chats' && (
+                    <div className="animate-in fade-in duration-300 space-y-3">
+                        
+                        {/* New Folder Inline Input */}
+                        {isCreatingFolder ? (
+                            <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-sky-400 flex gap-2 items-center animate-in fade-in slide-in-from-top-2">
+                                <input 
+                                    ref={newFolderInputRef}
+                                    value={newFolderName}
+                                    onChange={(e) => setNewFolderName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && confirmCreateFolder()}
+                                    placeholder="Nome cartella..."
+                                    className="flex-1 bg-transparent text-sm focus:outline-none text-slate-800 dark:text-white placeholder-slate-400"
+                                />
+                                <button onClick={confirmCreateFolder} className="p-1 text-green-500 hover:bg-green-500/10 rounded"><Check size={14}/></button>
+                                <button onClick={cancelCreateFolder} className="p-1 text-red-500 hover:bg-red-500/10 rounded"><X size={14}/></button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={startCreateFolder}
+                                className="w-full py-2 flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-sky-500 border border-dashed border-slate-300 dark:border-slate-700 hover:border-sky-400 rounded-lg transition-all"
+                            >
+                                <FolderPlus size={14} /> Nuova Cartella
+                            </button>
+                        )}
+
+                        {/* RENDER FOLDERS (Distinct Grey/Slate Gradient) */}
+                        {folders.map(folder => {
+                            const isExpanded = expandedFolders.has(folder.id);
+                            const isDragTarget = dragOverFolderId === folder.id;
+                            const folderChats = Object.entries(chats).filter(([, c]) => c.folderId === folder.id);
+
+                            return (
+                                <div key={folder.id} 
+                                     className={`rounded-xl border transition-all duration-300 overflow-hidden mb-1
+                                     ${isDragTarget 
+                                        ? 'border-sky-400 bg-sky-50 dark:bg-sky-900/30 shadow-[0_0_15px_rgba(14,165,233,0.3)] scale-[1.02]' 
+                                        : 'border-slate-300 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900'}`}
+                                     onDragOver={(e) => handleDragOver(e, folder.id)}
+                                     onDrop={(e) => handleDrop(e, folder.id)}
+                                >
+                                    {/* Folder Header (Compact Height) */}
+                                    <div className="flex items-center justify-between p-2 cursor-pointer hover:bg-white/50 dark:hover:bg-white/5"
+                                         onClick={() => toggleFolder(folder.id)}>
+                                        <div className="flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                                            {isExpanded ? <FolderOpen size={16} className="text-sky-500" /> : <Folder size={16} className="text-slate-500" />}
+                                            {folder.name}
+                                            <span className="text-[10px] text-slate-500 font-mono bg-white/50 dark:bg-black/20 px-1.5 rounded-full">{folderChats.length}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button onClick={(e) => deleteFolder(folder.id, e)} className="p-1 text-slate-400 hover:text-red-500 rounded"><Trash2 size={12}/></button>
+                                            <ChevronDown size={14} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
+                                        </div>
+                                    </div>
+
+                                    {/* Folder Contents */}
+                                    {isExpanded && (
+                                        <div className="bg-slate-50/50 dark:bg-black/20 p-1 space-y-1 border-t border-slate-200 dark:border-slate-700">
+                                            {folderChats.length === 0 && <div className="text-[10px] text-slate-400 text-center py-2 italic">Trascina qui le chat</div>}
+                                            {folderChats.sort(([,a], [,b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()).map(([id, chat]) => {
+                                                const isActive = id === currentChatId;
+                                                return (
+                                                    <div key={id} 
+                                                         onClick={() => loadChat(id)}
+                                                         draggable
+                                                         onDragStart={(e) => handleDragStart(e, id)}
+                                                         className={`group flex justify-between items-center p-1.5 rounded-lg cursor-pointer border transition-all duration-200 ml-2
+                                                         ${isActive 
+                                                            ? 'bg-white dark:bg-slate-800 border-l-2 border-l-sky-500 border-y-transparent border-r-transparent shadow-sm' 
+                                                            : 'border-transparent hover:bg-white/60 dark:hover:bg-white/5'}`}>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className={`text-xs font-medium truncate ${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                                                {chat.title}
+                                                            </h4>
+                                                        </div>
+                                                        <button onClick={(e) => deleteChat(id, e)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500"><Trash2 size={10}/></button>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+
+                        {/* ROOT CHATS (Not in folder & Not Archived) */}
+                        <div className="space-y-1 pt-2">
+                            {Object.entries(chats)
+                                .filter(([, c]) => !c.folderId && (showArchived ? c.archived : !c.archived))
+                                .sort(([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
+                                .map(([id, chat]) => {
+                                const isActive = id === currentChatId;
+                                const isMenuOpen = activeMenu === id;
+                                
+                                return (
+                                    <div key={id} 
+                                         onClick={() => loadChat(id)}
+                                         draggable
+                                         onDragStart={(e) => handleDragStart(e, id)}
+                                         className={`group relative p-3 rounded-xl cursor-pointer border transition-all duration-300
+                                         ${isActive 
+                                            ? 'bg-gradient-to-r from-sky-50 to-white dark:from-sky-900/30 dark:to-slate-900/30 border-sky-200 dark:border-sky-500/50 shadow-sm border-l-4 border-l-sky-500' 
+                                            : 'border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:translate-x-1'}`}>
+                                        
+                                        {renamingChat === id ? (
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    autoFocus
+                                                    className="w-full bg-transparent border-b border-sky-500 focus:outline-none text-sm"
+                                                    value={renameValue}
+                                                    onChange={(e) => setRenameValue(e.target.value)}
+                                                    onKeyDown={(e) => e.key === 'Enter' && confirmRename(id)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <button onClick={(e) => {e.stopPropagation(); confirmRename(id)}} className="text-green-500"><Check size={14}/></button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={`text-sm font-bold truncate transition-colors ${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-600 dark:text-slate-400 group-hover:text-sky-600 dark:group-hover:text-sky-300'}`}>
+                                                        {pinnedChats.has(id) && "📌 "}{chat.archived && "📦 "}{chat.title || "Nuova Strategia"}
+                                                    </h4>
+                                                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                                                        {new Date(chat.lastUpdated).toLocaleDateString(undefined, {day:'2-digit', month:'2-digit'})} • {new Date(chat.lastUpdated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                    </p>
+                                                </div>
+                                                
+                                                {/* Context Menu Trigger */}
+                                                <div className="relative">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setActiveMenu(isMenuOpen ? null : id) }} 
+                                                        className={`p-1.5 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-100 dark:hover:bg-white/10 transition-all ${isMenuOpen ? 'bg-sky-100 dark:bg-white/10 text-sky-500' : 'opacity-0 group-hover:opacity-100'}`}
+                                                    >
+                                                        <MoreHorizontal size={16} />
+                                                    </button>
+
+                                                    {/* DROPDOWN MENU */}
+                                                    {isMenuOpen && (
+                                                        <div className="absolute right-0 top-8 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                                                            <button onClick={(e) => { e.stopPropagation(); shareChat(id) }} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-700/50">
+                                                                <Share size={16} /> Condividi
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); startRenaming(id) }} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200">
+                                                                <Edit2 size={16} /> Rinomina
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); archiveChat(id) }} className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-3 text-sm text-slate-700 dark:text-slate-200">
+                                                                {chat.archived ? <RotateCcw size={16} /> : <Archive size={16} />} {chat.archived ? 'Ripristina' : 'Archivia'}
+                                                            </button>
+                                                            <button onClick={(e) => deleteChat(id, e)} className="w-full text-left px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 text-sm text-red-500 border-t border-slate-100 dark:border-slate-700/50">
+                                                                <Trash2 size={16} /> Elimina
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        
+                        {/* Archive Toggle */}
+                        <div className="pt-4 border-t border-dashed border-slate-200 dark:border-slate-800 mt-4">
+                            <button 
+                                onClick={() => setShowArchived(!showArchived)}
+                                className="w-full flex items-center justify-center gap-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 py-2"
+                            >
+                                <Archive size={12} /> {showArchived ? "Nascondi Archiviati" : "Mostra Archiviati"}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* MODE: AGENTS */}
+                {sidebarMode === 'agents' && (
+                    <div className="space-y-2 animate-in fade-in duration-300 px-1">
+                         {AI_TEAM_LIST.map((agentItem, idx) => {
+                             const agentData = AGENTS_DB[agentItem.id] || {};
+                             return (
+                                 <div key={idx} onClick={() => switchAgent(agentItem.id)} className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border transition-all duration-300 group cursor-pointer hover:shadow-md dark:hover:shadow-sky-900/20 ${activeAgentId === agentItem.id ? 'bg-sky-50 dark:bg-sky-900/30 border-sky-200 dark:border-sky-500/50' : 'bg-white/40 dark:bg-white/5 border-transparent hover:bg-white/80 dark:hover:bg-white/10'}`}>
+                                     <div className="flex items-center gap-3">
+                                         <div className={`w-10 h-10 rounded-full p-0.5 transition-all duration-300 ${activeAgentId === agentItem.id ? 'bg-gradient-to-tr from-sky-500 to-cyan-400' : 'bg-slate-200 dark:bg-slate-700'}`}><img src={agentData.image} className="w-full h-full rounded-full object-cover bg-white" alt={agentData.name}/></div>
+                                         <div><h4 className={`text-sm font-bold transition-colors ${activeAgentId === agentItem.id ? 'text-sky-600 dark:text-sky-400' : 'text-slate-700 dark:text-slate-200'}`}>{agentData.name}</h4><p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">{agentData.role}</p></div>
+                                     </div>
+                                     <button onClick={(e) => { e.stopPropagation(); window.open(agentItem.href, '_blank'); }} className="p-1.5 text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/30 rounded-lg transition-colors"><ExternalLink size={14} /></button>
+                                 </div>
+                             )
+                         })}
+                    </div>
+                )}
+            </div>
+
+            {/* Footer Settings */}
+            <div className="p-4 border-t border-sky-100 dark:border-sky-900/30 bg-white/30 dark:bg-black/20 backdrop-blur-sm"><div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 dark:bg-white/5 border border-sky-100 dark:border-white/5"><div className="flex items-center gap-2"><Zap size={16} className="text-sky-500" fill="currentColor" /><span className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Memory Core</span></div><button onClick={() => { setUseMemory(!useMemory); localStorage.setItem("tony-ai-use-memory", String(!useMemory)) }} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${useMemory ? 'bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.4)]' : 'bg-slate-300 dark:bg-slate-600'}`}><div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all duration-300 ${useMemory ? 'left-5.5' : 'left-0.5'}`}></div></button></div></div>
         </div>
 
-        {/* Chat Container */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, background: "#ffffff" }}>
-          {/* Chat Header */}
-          <div
-            className="chat-header"
-            style={{
-              background: "#235E84",
-              color: "#ffffff",
-              padding: "20px 40px",
-              borderBottom: "1px solid #e2e8f0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              minHeight: "80px",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, minWidth: 0 }}>
-              <button
-                className="hamburger-menu"
-                onClick={() => {
-                  setSidebarVisible(true)
-                  localStorage.setItem("tony-ai-sidebar-visible", "true")
-                }}
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  padding: "10px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  color: "#ffffff",
-                  display: "none",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-                title="Mostra menu"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-              </button>
-              <button
-                className="desktop-toggle"
-                onClick={() => {
-                  setSidebarVisible(!sidebarVisible)
-                  localStorage.setItem("tony-ai-sidebar-visible", String(!sidebarVisible))
-                }}
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  padding: "10px",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                  color: "#ffffff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-                title="Mostra/Nascondi conversazioni"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  {sidebarVisible ? (
-                    <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-                  ) : (
-                    <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-                  )}
-                </svg>
-              </button>
-              <div
-                className="chat-header-title"
-                style={{
-                  fontFamily: "Montserrat, sans-serif",
-                  fontSize: "20px",
-                  fontWeight: 600,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                Tony AI - Direttore Commerciale
-              </div>
-            </div>
+        {/* --- MAIN CONTENT --- */}
+        <div className={`flex-1 flex flex-col relative h-full overflow-hidden transition-colors duration-1000 ${isLoading ? 'bg-sky-50/50 dark:bg-sky-950/20 neural-grid-active' : 'bg-slate-50/50 dark:bg-transparent'}`}>
+            
+            {/* FLOATING HERO HEADER */}
+            <div className="sticky top-4 z-50 px-4 md:px-8">
+                <div className={`w-full max-w-6xl mx-auto rounded-2xl p-1 shadow-2xl transition-all duration-500 animate-float overflow-hidden relative ${isDark ? 'bg-slate-800/95 border border-sky-500/30 shadow-[0_0_50px_rgba(14,165,233,0.15)]' : 'bg-sky-100/90 border border-sky-300 shadow-[0_10px_40px_rgba(14,165,233,0.25)]'} backdrop-blur-xl`}>
+                    <div className="absolute inset-0 pointer-events-none opacity-40 brainwave-overlay"></div>
+                    <div className="relative flex items-center justify-between p-3 md:p-4 rounded-xl z-10">
+                        <div className="flex items-center gap-4 md:gap-6">
+                            {/* Mobile Menu Trigger */}
+                            <button onClick={() => setSidebarVisible(!sidebarVisible)} className="p-3 rounded-xl bg-sky-500 text-white shadow-lg shadow-sky-500/40 hover:scale-110 hover:shadow-sky-500/60 transition-all active:scale-95 border-t border-white/20 md:hidden flex items-center justify-center"><Menu size={24} strokeWidth={3} /></button>
+                            {/* Desktop Toggle */}
+                            <button onClick={() => setSidebarVisible(!sidebarVisible)} className="p-3 rounded-xl bg-sky-500 text-white shadow-lg shadow-sky-500/40 hover:scale-110 hover:shadow-sky-500/60 transition-all active:scale-95 border-t border-white/20 hidden md:flex items-center justify-center"><ChevronRight size={24} strokeWidth={3} /></button>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "16px", flexShrink: 0 }}>
-              <Link
-                href="/"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  border: "1px solid rgba(255, 255, 255, 0.2)",
-                  color: "#ffffff",
-                  transition: "all 0.2s ease",
-                  cursor: "pointer",
-                }}
-                title="Home"
-              >
-                <Home size={20} />
-              </Link>
-              <div
-                className="avatar-small"
-                style={{ width: "40px", height: "40px", borderRadius: "50%", overflow: "hidden" }}
-              >
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-10 h-10",
-                    },
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div
-            className="chat-messages"
-            style={{ flex: 1, overflowY: "auto", padding: "50px 80px", background: "#ffffff" }}
-          >
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`message-container tony-message ${message.sender}`}
-                style={{
-                  marginBottom: "32px",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "20px",
-                  animation: "fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-                  maxWidth: "90%",
-                  flexDirection: message.sender === "user" ? "row-reverse" : "row",
-                  marginLeft: message.sender === "user" ? "auto" : "0",
-                }}
-              >
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    background:
-                      message.sender === "ai" ? "linear-gradient(135deg, #235E84 0%, #235E84 100%)" : "#E3F2FD",
-                    color: message.sender === "ai" ? "#ffffff" : "#235E84",
-                    flexShrink: 0,
-                    fontWeight: 600,
-                    fontSize: "14px",
-                  }}
-                >
-                  <img
-                    src={
-                      message.sender === "ai"
-                        ? "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"
-                        : "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
-                    }
-                    alt={message.sender === "ai" ? "Tony AI" : "Cliente"}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                </div>
-
-                <div
-                  className="message-bubble tony-message-content"
-                  style={{
-                    flex: 1,
-                    background: message.sender === "user" ? "#235E84" : "#ffffff",
-                    padding: "20px 24px",
-                    borderRadius: "12px",
-                    border: message.sender === "user" ? "1px solid #235E84" : "1px solid #e2e8f0",
-                    minWidth: "200px",
-                  }}
-                >
-                  {message.text === "..." ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                      {[0, 1, 2].map((i) => (
-                        <div
-                          key={i}
-                          style={{
-                            width: "8px",
-                            height: "8px",
-                            background: "#64748b",
-                            borderRadius: "50%",
-                            animation: "typing 1.4s infinite ease-in-out both",
-                            animationDelay: `${i * 0.2}s`,
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          color: message.sender === "user" ? "#ffffff" : "#334155",
-                          lineHeight: 1.6,
-                          fontSize: "15px",
-                        }}
-                        dangerouslySetInnerHTML={{ __html: formatMessageText(message.text) }}
-                      />
-                      {message.time && (
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: message.sender === "user" ? "rgba(255,255,255,0.7)" : "#64748b",
-                            marginTop: "8px",
-                          }}
-                        >
-                          {message.time}
+                            <div className="flex items-center gap-4 md:gap-6">
+                                <div className={`relative w-16 h-16 md:w-20 md:h-20 shrink-0 rounded-full border-[3px] border-sky-400 shadow-[0_0_25px_rgba(56,189,248,0.6)] overflow-hidden bg-slate-950 ${isLoading ? 'animate-pulse shadow-sky-300 ring-2 ring-sky-500/50' : ''}`}><img src={currentAgent.image} className="w-full h-full object-cover" alt="Hero" /><div className="absolute inset-0 bg-sky-500/10 mix-blend-overlay"></div></div>
+                                <div><div className="flex items-center gap-3 mb-1"><h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none drop-shadow-md">{currentAgent.name}</h1>{isLoading ? <span className="flex items-center gap-2 px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/50 text-sky-400 text-[10px] font-bold tracking-widest uppercase animate-pulse"><BrainCircuit size={12} /> Thinking...</span> : <span className="px-2 py-0.5 rounded bg-sky-500 text-white text-[10px] font-bold tracking-widest shadow-[0_0_10px_rgba(14,165,233,0.5)] uppercase">Online</span>}</div><p className={`text-sm leading-tight max-w-md font-medium hidden lg:block opacity-90 ${isDark ? 'text-sky-100' : 'text-slate-600'}`}>"{currentAgent.description}"</p></div>
+                            </div>
                         </div>
-                      )}
-                    </>
-                  )}
+                        <div className="flex items-center gap-3 ml-auto">
+                            <button onClick={() => setIsDark(!isDark)} className="p-2.5 rounded-full bg-slate-200/50 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 transition text-slate-600 dark:text-slate-300">{isDark ? <Sun size={20}/> : <Moon size={20}/>}</button>
+                            <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-2 hidden sm:block"></div>
+                            <a href="/" className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all border-t border-white/20 flex items-center justify-center group"><Home size={22} strokeWidth={2.5} className="group-hover:scale-110 transition-transform"/></a>
+                            <div className="hidden sm:block"><MockUserButton /></div>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div
-            className="input-container"
-            style={{ padding: "30px 80px", borderTop: "1px solid #e2e8f0", background: "#ffffff" }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "flex-end",
-                gap: "12px",
-                background: "#ffffff",
-                border: "2px solid #e2e8f0",
-                borderRadius: "12px",
-                padding: "12px 16px",
-                transition: "all 0.2s ease",
-              }}
-            >
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Scrivi la tua domanda per Tony..."
-                disabled={isLoading}
-                style={{
-                  flex: 1,
-                  border: "none",
-                  outline: "none",
-                  background: "transparent",
-                  fontSize: "15px",
-                  color: "#475569",
-                  resize: "none",
-                  minHeight: "24px",
-                  maxHeight: "120px",
-                  fontFamily: "inherit",
-                }}
-                rows={1}
-              />
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim() || isLoading}
-                style={{
-                  background: input.trim() && !isLoading ? "#235E84" : "#cbd5e1",
-                  border: "none",
-                  color: "#ffffff",
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  cursor: input.trim() && !isLoading ? "pointer" : "not-allowed",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                  transition: "all 0.2s ease",
-                }}
-                title="Invia (Invio)"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
-              </button>
             </div>
-          </div>
+
+            {/* CHAT */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 z-10 custom-scrollbar relative pt-4">
+                <div className="max-w-6xl mx-auto space-y-6 pb-4 relative z-10">
+                    {messages.map((message, index) => (
+                        <div key={index} className={`flex gap-4 ${message.sender === 'user' ? 'flex-row-reverse' : ''} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-md ring-2 ring-white dark:ring-slate-800 overflow-hidden ${message.sender === 'ai' ? 'bg-gradient-to-br from-sky-500 to-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                {message.sender === 'ai' ? (
+                                    <img src={currentAgent.image} alt="AI" className="w-full h-full object-cover"/> 
+                                ) : (
+                                    <img src={USER_AVATAR} alt="User" className="w-full h-full object-cover"/>
+                                )}
+                            </div>
+                            <div className={`relative max-w-[90%] sm:max-w-[85%] p-5 rounded-2xl text-sm sm:text-base shadow-sm hover:shadow-md transition-shadow duration-300 ${message.sender === 'ai' 
+                                ? 'glass-panel rounded-tl-none border-l-4 border-l-sky-500 text-slate-800 dark:text-slate-100 bg-white/80 dark:bg-slate-800/80' 
+                                : 'bg-white dark:bg-gradient-to-r dark:from-sky-500 dark:to-blue-600 text-slate-900 dark:text-white rounded-tr-none border border-sky-400 shadow-sm'}`}>
+                                {message.text === "..." ? (
+                                    <div className="flex items-center gap-2"><Activity size={16} className="text-sky-500 animate-pulse" /><span className="text-xs font-mono text-sky-500 animate-pulse">ANALYZING...</span></div>
+                                ) : (
+                                    <div className={`markdown-body ${message.sender === 'user' ? 'text-inherit' : 'text-inherit'}`}>
+                                        {message.sender === 'ai' && !isLoading && <button onClick={() => {navigator.clipboard.writeText(message.text); setCopiedMessageIndex(index); setTimeout(()=>setCopiedMessageIndex(null),2000)}} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-sky-100 dark:hover:bg-white/10 rounded text-slate-400 hover:text-sky-600">{copiedMessageIndex === index ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}</button>}
+                                        {message.files && message.files.length > 0 && <div className="flex flex-wrap gap-2 mb-3">{message.files.map((file, fIdx) => <div key={fIdx} className="flex items-center gap-2 p-2 rounded-lg bg-white/10 border border-white/20 text-xs"><FileText size={14} /><span className="truncate max-w-[150px]">{file}</span></div>)}</div>}
+                                        <div dangerouslySetInnerHTML={{ __html: formatMessageText(message.text) }} />
+                                    </div>
+                                )}
+                                <div className={`text-[10px] mt-2 text-right font-mono opacity-70 ${message.sender === 'user' ? 'text-inherit' : 'text-slate-400'}`}>{message.time}</div>
+                            </div>
+                        </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                </div>
+            </div>
+
+            {/* INPUT */}
+            <div className={`shrink-0 p-4 sm:p-6 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-brand-dark dark:via-brand-dark/95 dark:to-transparent z-20 sticky bottom-0 transition-all duration-1000 ${isLoading ? 'synapse-active pb-10 synapse-beam' : ''}`}>
+                <div className={`max-w-6xl mx-auto relative glass-panel rounded-2xl p-1.5 shadow-2xl border border-sky-200 dark:border-sky-500/20 focus-within:border-sky-400 focus-within:shadow-[0_0_30px_rgba(56,189,248,0.25)] transition-all duration-500 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl ${isLoading ? 'border-sky-400 shadow-[0_0_50px_rgba(14,165,233,0.3)]' : ''}`}>
+                    {selectedFiles.length > 0 && <div className="flex flex-wrap gap-2 p-3 border-b border-slate-200 dark:border-slate-700/50 bg-slate-50/50 dark:bg-black/20">{selectedFiles.map((file, idx) => <div key={idx} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-sky-200 dark:border-sky-700 text-xs font-medium text-slate-700 dark:text-sky-100 shadow-sm animate-in fade-in zoom-in">{file.type.startsWith('image/') ? <ImageIcon size={14} className="text-sky-500"/> : <FileText size={14} className="text-sky-500"/>}<span className="max-w-[120px] truncate">{file.name}</span><button onClick={() => removeFile(idx)} className="p-0.5 hover:bg-red-100 hover:text-red-500 rounded-full transition-colors"><X size={12}/></button></div>)}</div>}
+                    <div className="relative flex items-end gap-3 bg-white/50 dark:bg-slate-900/60 rounded-xl p-3">
+                        <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+                        <button onClick={handleUploadClick} className="p-3 text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg transition-all"><Paperclip size={22} /></button>
+                        <textarea ref={textareaRef} value={inputValue} onChange={(e) => setInputValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()} disabled={isLoading} placeholder={isLoading ? "Elaborazione neurale in corso..." : "Scrivi il tuo messaggio..."} rows={1} className="flex-1 bg-transparent border-none text-slate-900 dark:text-white placeholder-slate-400 focus:ring-0 resize-none py-3 px-4 leading-tight font-tech text-base font-medium"/>
+                        <button onClick={sendMessage} disabled={(!inputValue.trim() && selectedFiles.length === 0) || isLoading} className={`p-3 btn-electric text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:scale-105 active:scale-95 shadow-lg ${isLoading ? 'animate-pulse' : ''}`}>{isLoading ? <Sparkles size={22} className="animate-spin" /> : <Send size={22} strokeWidth={2.5} />}</button>
+                    </div>
+                </div>
+                <div className="text-center mt-3 transition-opacity duration-500"><p className={`text-[10px] font-mono uppercase tracking-widest flex items-center justify-center gap-2 ${isLoading ? 'text-sky-400 font-bold' : 'text-slate-400'}`}><span>AI TEAM SECURE CHANNEL</span><span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-sky-400 animate-ping' : 'bg-emerald-400 animate-pulse'}`}></span><span>{isLoading ? 'NEURAL PROCESSING ACTIVE...' : 'ENCRYPTED'}</span></p></div>
+            </div>
+
         </div>
       </div>
     </>
-  )
+  );
 }
