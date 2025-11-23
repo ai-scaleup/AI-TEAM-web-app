@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 
 const N8N_URL = "https://n8n-c2lq.onrender.com/webhook/4e27c666-aa21-4d92-b78a-34229167245b/chat"
 const AVATAR = "https://www.ai-scaleup.com/wp-content/uploads/2025/03/Giulia-Ai-Team.jpeg"
@@ -12,6 +12,7 @@ export default function GiuliaWidget() {
   const sendBtnRef = useRef<HTMLButtonElement>(null)
   const chatInputRef = useRef<HTMLInputElement>(null)
   const chatMessagesRef = useRef<HTMLDivElement>(null)
+  const [isOpen, setIsOpen] = useState(false)
 
   const sanitizeText = (text: string) =>
     text
@@ -24,18 +25,14 @@ export default function GiuliaWidget() {
     if (!chatMessagesRef.current) return null
 
     const msg = document.createElement("div")
-    msg.className = `message ${sender}`
+    msg.className = `giulia-message ${sender}`
 
     const avatar = document.createElement("div")
-    avatar.className = "message-avatar"
-    avatar.innerHTML = `<img src="${
-      sender === "ai"
-        ? AVATAR
-        : "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
-    }" alt="${sender === "ai" ? "Giulia" : "User"}">`
+    avatar.className = "giulia-message-avatar"
+    avatar.innerHTML = `<img src="${sender === "ai" ? AVATAR : 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23E52B50"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/%3E%3C/svg%3E'}" alt="${sender}">`
 
     const content = document.createElement("div")
-    content.className = "message-content"
+    content.className = "giulia-message-content"
 
     const cleanText = sanitizeText(text)
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
@@ -46,6 +43,7 @@ export default function GiuliaWidget() {
 
     msg.appendChild(avatar)
     msg.appendChild(content)
+
     chatMessagesRef.current.appendChild(msg)
     chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight
 
@@ -54,7 +52,8 @@ export default function GiuliaWidget() {
 
   const toggleOpen = (open: boolean) => {
     if (!chatWindowRef.current) return
-    chatWindowRef.current.classList.toggle("open", open)
+    setIsOpen(open)
+    chatWindowRef.current.classList.toggle("giulia-open", open)
   }
 
   const sendMessage = async () => {
@@ -70,10 +69,7 @@ export default function GiuliaWidget() {
 
     const aiMsg = addMessage("", "ai")
     if (aiMsg) {
-      aiMsg.innerHTML = `
-        <div class="thinking-dots">
-          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-        </div>`
+      aiMsg.innerHTML = `<div class="giulia-typing-indicator"><span></span><span></span><span></span></div>`
       messages.scrollTop = messages.scrollHeight
     }
 
@@ -88,8 +84,8 @@ export default function GiuliaWidget() {
       })
 
       const textData = await res.text()
-
       const extracted: string[] = []
+
       try {
         const regex = /"content"\s*:\s*"([^"]*?)"/g
         let match: RegExpExecArray | null
@@ -122,7 +118,7 @@ export default function GiuliaWidget() {
   }
 
   useEffect(() => {
-    addMessage("Ciao 👋 Sono Giulia, la tua AI Team Tutor! Come posso aiutarti?", "ai")
+    addMessage("Ciao! 👋 Sono Giulia. Come posso aiutarti a gestire il tuo team oggi?", "ai")
 
     const bubble = chatBubbleRef.current
     const close = closeBtnRef.current
@@ -142,298 +138,531 @@ export default function GiuliaWidget() {
     bubble?.addEventListener("click", onBubble)
     close?.addEventListener("click", onClose)
     send?.addEventListener("click", onSend)
-    input?.addEventListener("keydown", onKey)
+    input?.addEventListener("keydown", onKey as any)
 
     return () => {
       bubble?.removeEventListener("click", onBubble)
       close?.removeEventListener("click", onClose)
       send?.removeEventListener("click", onSend)
-      input?.removeEventListener("keydown", onKey)
+      input?.removeEventListener("keydown", onKey as any)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
     <>
-      <div className="giulia-widget-container">
-        <div className="giulia-chat-bubble" ref={chatBubbleRef} aria-label="Apri chat Giulia">
-          <img src={AVATAR || "/placeholder.svg"} alt="Giulia" />
-        </div>
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-        <div className="giulia-chat-window" ref={chatWindowRef} role="dialog" aria-label="Chat Giulia">
-          <div className="chat-header">
-            <div className="header-left">
-              <div className="header-avatar">
-                <img src={AVATAR || "/placeholder.svg"} alt="Giulia" />
-              </div>
-              <div className="chat-title">Giulia, AI Team Tutor</div>
-            </div>
-            <button className="giulia-close-btn" ref={closeBtnRef} aria-label="Chiudi">
-              ×
-            </button>
-          </div>
+        .giulia-widget {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          z-index: 9999;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+          contain: layout style;
+        }
 
-          <div className="chat-messages" ref={chatMessagesRef} />
-
-          <div className="input-container">
-            <input className="message-input" ref={chatInputRef} placeholder="Scrivi la tua domanda..." />
-            <button className="send-button" ref={sendBtnRef} aria-label="Invia">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <style jsx>{`
-        .giulia-widget-container {
-          font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          -webkit-font-smoothing: antialiased;
-          font-size: 14px;
-          line-height: 1.5;
+        .giulia-widget * {
+          box-sizing: border-box;
         }
 
         .giulia-chat-bubble {
-          position: fixed;
-          bottom: 65px;
-          right: 25px;
-          width: 60px;
-          height: 60px;
+          width: 70px;
+          height: 70px;
+          background: linear-gradient(135deg, #DC143C 0%, #E63462 100%);
           border-radius: 50%;
-          background: #fff;
-          overflow: hidden;
           cursor: pointer;
-          z-index: 9999;
-          transition: 0.3s;
-          border: 6px solid #b52636;
           display: flex;
           align-items: center;
           justify-content: center;
+          box-shadow: 0 10px 40px rgba(220, 20, 60, 0.4);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+          margin: 0;
+          padding: 0;
         }
-        .giulia-chat-bubble img {
+
+        .giulia-chat-bubble:hover {
+          transform: scale(1.08);
+          box-shadow: 0 14px 50px rgba(220, 20, 60, 0.6);
+        }
+
+        .giulia-chat-bubble:before {
+          content: '';
+          position: absolute;
           width: 100%;
           height: 100%;
-          object-fit: contain;
-          border-radius: 50%;
-          background: #fff;
+          background: radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, transparent 70%);
+          animation: giulia-pulse-glow 2.5s infinite;
         }
-        .giulia-chat-bubble:hover {
-          transform: scale(1.1);
-          background: #fff;
+
+        @keyframes giulia-pulse-glow {
+          0%, 100% { transform: scale(1); opacity: 0.7; }
+          50% { transform: scale(1.25); opacity: 0.35; }
+        }
+
+        .giulia-chat-bubble img {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          object-fit: cover;
+          position: relative;
+          z-index: 1;
+          border: 2px solid rgba(255, 255, 255, 0.5);
         }
 
         .giulia-chat-window {
           position: fixed;
-          bottom: 140px;
-          right: 25px;
+          bottom: 100px;
+          right: 20px;
           width: 400px;
           height: 600px;
-          max-height: calc(100vh - 140px);
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+          background: rgba(20, 26, 45, 0.75);
+          backdrop-filter: blur(30px);
+          -webkit-backdrop-filter: blur(30px);
+          border-radius: 20px;
+          overflow: hidden;
           display: none;
           flex-direction: column;
-          overflow: hidden;
-          z-index: 10000;
-        }
-        .giulia-chat-window.open {
-          display: flex;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          max-width: calc(100vw - 40px);
+          max-height: calc(100vh - 140px);
         }
 
-        .chat-header {
-          background: #b52636;
-          color: #fff;
-          height: 55px;
+        .giulia-chat-window.giulia-open {
+          display: flex;
+          animation: giulia-slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes giulia-slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        .giulia-header {
+          background: linear-gradient(135deg, #DC143C 0%, #E63462 100%);
+          padding: 20px 24px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .giulia-header::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: radial-gradient(circle at 25% 50%, rgba(255, 255, 255, 0.12), transparent 65%);
+          pointer-events: none;
+        }
+
+        .giulia-header-content {
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          padding: 0 16px;
+          gap: 14px;
+          position: relative;
+          z-index: 1;
         }
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .header-avatar {
-          width: 42px;
-          height: 42px;
+
+        .giulia-avatar {
+          width: 50px;
+          height: 50px;
           border-radius: 50%;
-          background: #fff;
+          border: 2.5px solid rgba(255, 255, 255, 0.35);
+          overflow: hidden;
+          flex-shrink: 0;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .giulia-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .giulia-info {
+          flex: 1;
+        }
+
+        .giulia-name {
+          font-size: 22px;
+          font-weight: 700;
+          color: white;
+          margin-bottom: 2px;
+          letter-spacing: -0.3px;
+        }
+
+        .giulia-role {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          color: rgba(255, 255, 255, 0.85);
+          font-weight: 600;
+        }
+
+        .giulia-close-btn {
+          position: absolute;
+          top: 20px;
+          right: 24px;
+          width: 32px;
+          height: 32px;
+          background: rgba(255, 255, 255, 0.12);
+          border: none;
+          border-radius: 50%;
+          color: white;
+          font-size: 22px;
+          cursor: pointer;
+          transition: all 0.3s;
           display: flex;
           align-items: center;
           justify-content: center;
-        }
-        .header-avatar img {
-          width: 90%;
-          height: 90%;
-          border-radius: 50%;
-          object-fit: cover;
-        }
-        .chat-title {
-          font-weight: 600;
-          font-size: 16px;
+          backdrop-filter: blur(8px);
+          z-index: 2;
+          font-weight: 300;
+          line-height: 1;
         }
 
-        .chat-messages {
+        .giulia-close-btn:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: rotate(90deg);
+        }
+
+        .giulia-chat-messages {
           flex: 1;
           overflow-y: auto;
           padding: 20px;
-          background: #f8fafc;
+          background: transparent;
         }
 
-        .chat-messages :global(.message) {
-          margin-bottom: 16px;
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
+        .giulia-chat-messages::-webkit-scrollbar {
+          width: 5px;
         }
-        .chat-messages :global(.message.user) {
+
+        .giulia-chat-messages::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+        }
+
+        .giulia-chat-messages::-webkit-scrollbar-thumb {
+          background: rgba(255, 255, 255, 0.15);
+          border-radius: 3px;
+        }
+
+        .giulia-chat-messages::-webkit-scrollbar-thumb:hover {
+          background: rgba(255, 255, 255, 0.25);
+        }
+
+        .giulia-message {
+          display: flex;
+          gap: 10px;
+          margin-bottom: 16px;
+          animation: giulia-fadeIn 0.35s;
+        }
+
+        @keyframes giulia-fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .giulia-message.ai {
+          flex-direction: row;
+        }
+
+        .giulia-message.user {
           flex-direction: row-reverse;
         }
-        .chat-messages :global(.message-avatar) {
-          width: 36px;
-          height: 36px;
+
+        .giulia-message-avatar {
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           overflow: hidden;
           flex-shrink: 0;
-          background: #fff;
-          border: 1px solid #ddd;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          border: 2px solid rgba(255, 255, 255, 0.08);
         }
-        .chat-messages :global(.message-avatar img) {
-          width: 90%;
-          height: 90%;
+
+        .giulia-message-avatar img {
+          width: 100%;
+          height: 100%;
           object-fit: cover;
-          border-radius: 50%;
         }
 
-        .chat-messages :global(.message-content) {
-          max-width: 80%;
-          background: #f1f5f9;
-          padding: 10px 14px;
-          border-radius: 12px;
-          display: inline-block;
-          white-space: normal;
-          overflow-wrap: break-word;
-          word-break: normal;
-          hyphens: none;
-          text-align: left;
-          line-height: 1.6;
-          letter-spacing: 0.02em;
-          font-variant-ligatures: none;
-          font-kerning: none;
-          font-feature-settings: 'kern' 0, 'liga' 0, 'clig' 0, 'calt' 0;
-          text-rendering: optimizeSpeed;
-        }
-        .chat-messages :global(.message-content *) {
-          word-break: normal !important;
-          overflow-wrap: break-word !important;
-          white-space: normal !important;
-          hyphens: none !important;
-        }
-
-        .chat-messages :global(.message.user .message-content) {
-          background: #b52636;
-          color: #fff;
-        }
-
-        .input-container {
+        .giulia-message-content {
+          max-width: 70%;
           padding: 12px 16px;
-          border-top: 1px solid #e2e8f0;
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          background: #fff;
-        }
-        .message-input {
-          flex: 1;
-          border: 1px solid #e2e8f0;
-          border-radius: 50px;
-          padding: 8px 14px;
-          font-size: 14px;
-          outline: none;
-          font-family: inherit;
-        }
-        .send-button {
-          background: #b52636;
-          color: #fff;
-          border: none;
-          border-radius: 50%;
-          width: 40px;
-          height: 40px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-        .send-button:hover {
-          background: #c82a3a;
+          border-radius: 14px;
+          font-size: 15px;
+          line-height: 1.5;
+          font-weight: 400;
         }
 
-        .chat-messages :global(.thinking-dots) {
+        .giulia-message.ai .giulia-message-content {
+          background: rgba(25, 31, 48, 0.5);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          color: #e5e5e5;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px 14px 14px 4px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        }
+
+        .giulia-message.user .giulia-message-content {
+          background: linear-gradient(135deg, #DC143C 0%, #E63462 100%);
+          color: white;
+          border-radius: 14px 14px 4px 14px;
+          box-shadow: 0 4px 16px rgba(220, 20, 60, 0.3);
+        }
+
+        .giulia-typing-indicator {
           display: flex;
-          align-items: center;
-          gap: 4px;
+          gap: 5px;
+          padding: 6px 0;
         }
-        .chat-messages :global(.dot) {
-          width: 6px;
-          height: 6px;
-          background: #999;
+
+        .giulia-typing-indicator span {
+          width: 8px;
+          height: 8px;
+          background: #DC143C;
           border-radius: 50%;
-          animation: blink 1.2s infinite;
+          animation: giulia-bounce 1.4s infinite;
         }
-        .chat-messages :global(.dot:nth-child(2)) {
-          animation-delay: 0.2s;
-        }
-        .chat-messages :global(.dot:nth-child(3)) {
-          animation-delay: 0.4s;
-        }
-        @keyframes blink {
-          0%,
-          80%,
-          100% {
-            opacity: 0.2;
+
+        @keyframes giulia-bounce {
+          0%, 60%, 100% {
+            transform: translateY(0);
+            opacity: 0.5;
           }
-          40% {
+          30% {
+            transform: translateY(-10px);
             opacity: 1;
           }
         }
 
-        .giulia-close-btn {
-          background: none;
+        .giulia-chat-input-container {
+          padding: 18px 20px;
+          background: rgba(12, 17, 32, 0.6);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .giulia-input-status {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 10px;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1.2px;
+          color: #7a8292;
+          font-weight: 600;
+        }
+
+        .giulia-offline-dot {
+          width: 7px;
+          height: 7px;
+          background: #8a9099;
+          border-radius: 50%;
+        }
+
+        .giulia-chat-input-wrapper {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          width: 100%;
+        }
+
+        .giulia-chat-input {
+          flex: 1;
+          min-width: 0;
+          background: rgba(20, 28, 45, 0.5);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 24px;
+          padding: 12px 20px;
+          color: white;
+          font-size: 15px;
+          outline: none;
+          transition: all 0.3s;
+          font-weight: 400;
+        }
+
+        .giulia-chat-input::placeholder {
+          color: rgba(255, 255, 255, 0.35);
+        }
+
+        .giulia-chat-input:focus {
+          background: rgba(20, 28, 45, 0.6);
+          border-color: #DC143C;
+          box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.15);
+        }
+
+        .giulia-send-btn {
+          width: 50px;
+          height: 50px;
+          background: linear-gradient(135deg, #DC143C 0%, #E63462 100%);
           border: none;
-          color: #fff;
-          font-size: 24px;
+          border-radius: 50%;
+          color: white;
           cursor: pointer;
-          line-height: 1;
-          padding: 0;
-          width: 32px;
-          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
-        }
-        .giulia-close-btn:hover {
-          opacity: 0.8;
+          transition: all 0.3s;
+          box-shadow: 0 6px 20px rgba(220, 20, 60, 0.35);
+          flex-shrink: 0;
+          min-width: 50px;
+          min-height: 50px;
         }
 
-        @media (max-width: 450px) {
+        .giulia-send-btn:hover {
+          transform: scale(1.06);
+          box-shadow: 0 8px 28px rgba(220, 20, 60, 0.5);
+        }
+
+        .giulia-send-btn:active {
+          transform: scale(0.96);
+        }
+
+        .giulia-send-btn svg {
+          width: 20px;
+          height: 20px;
+          fill: white;
+        }
+
+        @media (max-width: 768px) {
           .giulia-chat-window {
-            width: 100vw;
-            height: 100vh;
-            bottom: 0;
-            right: 0;
-            border-radius: 0;
-            max-height: 100vh;
+            width: calc(100vw - 40px);
+            max-width: 380px;
+            height: 580px;
+            bottom: 100px;
+            right: 20px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .giulia-widget {
+            bottom: 16px;
+            right: 16px;
+          }
+
+          .giulia-chat-bubble {
+            width: 60px;
+            height: 60px;
+          }
+
+          .giulia-chat-bubble img {
+            width: 36px;
+            height: 36px;
+          }
+
+          .giulia-chat-window {
+            width: calc(100vw - 32px);
+            height: calc(100vh - 120px);
+            bottom: 90px;
+            right: 16px;
+            border-radius: 18px;
+          }
+
+          .giulia-header {
+            padding: 18px 20px;
+          }
+
+          .giulia-chat-messages {
+            padding: 16px;
+          }
+
+          .giulia-chat-input-container {
+            padding: 16px 18px;
+          }
+
+          .giulia-chat-input {
+            font-size: 14px;
+            padding: 11px 18px;
+          }
+
+          .giulia-send-btn {
+            width: 46px;
+            height: 46px;
+            min-width: 46px;
+            min-height: 46px;
+          }
+
+          .giulia-send-btn svg {
+            width: 18px;
+            height: 18px;
+          }
+
+          .giulia-message-content {
+            max-width: 75%;
+            font-size: 14px;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .giulia-chat-input {
+            font-size: 13px;
+            padding: 10px 16px;
+          }
+
+          .giulia-send-btn {
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
+            min-height: 44px;
           }
         }
       `}</style>
+
+      <div className="giulia-widget">
+        <div className="giulia-chat-bubble" ref={chatBubbleRef}>
+          <img src={AVATAR || "/placeholder.svg"} alt="Giulia AI" />
+        </div>
+
+        <div className="giulia-chat-window" ref={chatWindowRef}>
+          <div className="giulia-header">
+            <button className="giulia-close-btn" ref={closeBtnRef}>
+              ×
+            </button>
+            <div className="giulia-header-content">
+              <div className="giulia-avatar">
+                <img src={AVATAR || "/placeholder.svg"} alt="Giulia AI" />
+              </div>
+              <div className="giulia-info">
+                <div className="giulia-name">Giulia AI</div>
+                <div className="giulia-role">Assistente Operativo</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="giulia-chat-messages" ref={chatMessagesRef}></div>
+
+          <div className="giulia-chat-input-container">
+            <div className="giulia-input-status">
+              <div className="giulia-offline-dot"></div>
+              <span>Offline</span>
+            </div>
+            <div className="giulia-chat-input-wrapper">
+              <input type="text" className="giulia-chat-input" placeholder="Scrivi un comando..." ref={chatInputRef} />
+              <button className="giulia-send-btn" ref={sendBtnRef}>
+                <svg viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </>
   )
 }
