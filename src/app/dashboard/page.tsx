@@ -61,13 +61,14 @@ const agents: UiAgent[] = [
     image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png",
     href: "/dashboard/tony-ai",
   },
-  {
-    key: "ALADINO",
-    name: "Aladino AI",
-    role: "Creatore di nuove offerte e prodotti",
-    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
-    href: "/dashboard/aladino-ai",
+   {
+    key: "MIKE",
+    name: "Mike AI",
+    role: "Direttore Marketing",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
+    href: "/dashboard/mike-ai",
   },
+
   {
     key: "LARA",
     name: "Lara AI",
@@ -83,11 +84,11 @@ const agents: UiAgent[] = [
     href: "/dashboard/simone-ai",
   },
   {
-    key: "MIKE",
-    name: "Mike AI",
-    role: "Direttore Marketing",
-    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Mike-AI-digital-marketing-mg.png",
-    href: "/dashboard/mike-ai",
+    key: "ALADINO",
+    name: "Aladino AI",
+    role: "Creatore di nuove offerte e prodotti",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Aladdin-AI-consultant.png",
+    href: "/dashboard/aladino-ai",
   },
   {
     key: "VALENTINA",
