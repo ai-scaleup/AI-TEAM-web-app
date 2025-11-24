@@ -106,24 +106,28 @@ const simpleMarkdown = {
         '<div class="overflow-x-auto my-3 rounded border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5"><table class="w-full text-left border-collapse text-xs">'
 
       const headerCols = tableBuffer[0].split("|")
-      const headerCells = headerCols.filter((c) => c.trim()).map((c) => c.trim())
+const headerCells = headerCols.map((c) => c.trim()).filter(Boolean)
 
-      html += '<thead class="bg-slate-100 dark:bg-white/10"><tr>'
-      headerCells.forEach((cell) => {
-        html += `<th class="p-2 border-b border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-white">${formatInline(cell)}</th>`
-      })
-      html += "</tr></thead><tbody>"
+html += '<thead class="bg-slate-100 dark:bg-white/10"><tr>'
+headerCells.forEach((cell) => {
+  html += `<th class="p-2 border-b border-slate-200 dark:border-white/10 font-bold text-slate-800 dark:text-white">${formatInline(cell)}</th>`
+})
+html += "</tr></thead><tbody>"
 
-      for (let i = 2; i < tableBuffer.length; i++) {
-        const rowCols = tableBuffer[i].split("|")
-        const rowCells = rowCols.filter((c) => c.trim()).map((c) => c.trim())
-        html +=
-          '<tr class="border-b border-slate-200 dark:border-white/5 last:border-0 hover:bg-slate-100/50 dark:hover:bg-white/5">'
-        rowCells.forEach((cell) => {
-          html += `<td class="p-2 opacity-90">${formatInline(cell)}</td>`
-        })
-        html += "</tr>"
-      }
+for (let i = 2; i < tableBuffer.length; i++) {
+  const rowCols = tableBuffer[i].split("|")
+  const rowCells = rowCols.map((c) => c.trim()).filter(Boolean)
+  
+  // Only add row if it has actual content
+  if (rowCells.length > 0 && rowCells.some(cell => cell.length > 0)) {
+    html +=
+      '<tr class="border-b border-slate-200 dark:border-white/5 last:border-0 hover:bg-slate-100/50 dark:hover:bg-white/5">'
+    rowCells.forEach((cell) => {
+      html += `<td class="p-2 opacity-90">${formatInline(cell)}</td>`
+    })
+    html += "</tr>"
+  }
+}
       html += "</tbody></table></div>"
 
       output += html
@@ -844,71 +848,110 @@ In alternativa, preferisci una consulenza completa per sviluppare un sales plan 
   }
 
   const handleCopyMessage = async (text: string, index: number) => {
-    try {
-      let htmlContent = formatMessageText(text)
+  console.log("🔧 TABLE COPY FIX v3.0 - ACTIVE")
+  
+  try {
+    let htmlContent = formatMessageText(text)
+    console.log("📋 Original HTML:", htmlContent.substring(0, 300))
 
-      htmlContent = htmlContent
-        .replace(/<div class="overflow-x-auto[^>]*>/g, "")
-        .replace(/<\/table><\/div>/g, "</table>")
-        .replace(/<strong[^>]*>/g, '<strong style="font-weight: 700; color: #0f172a;">')
-        .replace(/<em[^>]*>/g, '<em style="font-style: italic; color: #334155;">')
-        .replace(
-          /<code[^>]*>/g,
-          '<code style="background-color: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; border: 1px solid #e2e8f0;">',
-        )
-        .replace(
-          /<ul[^>]*>/g,
-          '<ul style="margin-left: 20px; list-style-type: disc; padding-left: 20px; margin-bottom: 10px;">',
-        )
-        .replace(/<li[^>]*>/g, '<li style="margin-bottom: 4px;">')
-        .replace(
-          /<h3[^>]*>/g,
-          '<h3 style="font-size: 18px; font-weight: bold; margin-top: 15px; margin-bottom: 5px; color: #0f172a;">',
-        )
-        .replace(
-          /<h2[^>]*>/g,
-          '<h2 style="font-size: 22px; font-weight: bold; border-bottom: 2px solid #e2e8f0; margin-top: 20px; margin-bottom: 10px; color: #0f172a;">',
-        )
-        .replace(
-          /<table[^>]*>/g,
-          '<table style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1; font-family: sans-serif; font-size: 14px; margin: 10px 0;">',
-        )
-        .replace(/<thead[^>]*>/g, '<thead style="background-color: #f1f5f9;">')
-        .replace(
-          /<th[^>]*>/g,
-          '<th style="border: 1px solid #94a3b8; padding: 10px; text-align: left; font-weight: bold; background-color: #f1f5f9; color: #0f172a;">',
-        )
-        .replace(/<td[^>]*>/g, '<td style="border: 1px solid #cbd5e1; padding: 8px; color: #334155;">')
+    // STEP 1: Remove wrapper divs from tables
+    htmlContent = htmlContent.replace(
+      /<div[^>]*class="[^"]*overflow-x-auto[^"]*"[^>]*>\s*([\s\S]*?)\s*<\/div>/g,
+      '$1'
+    )
 
-      const finalHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head><meta charset="utf-8"></head>
-        <body style="font-family: sans-serif; color: #0f172a; line-height: 1.6;">
-          ${htmlContent}
-        </body>
-        </html>
-      `
+    // STEP 2: Use DOM parser to clean empty rows
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(htmlContent, 'text/html')
+    
+    // Find all table rows and remove empty ones
+    const allRows = doc.querySelectorAll('tr')
+    allRows.forEach(row => {
+      const cells = row.querySelectorAll('td, th')
+      let hasContent = false
+      
+      // Check if any cell has actual text content
+      cells.forEach(cell => {
+        const content = cell.textContent?.trim() || ''
+        if (content.length > 0) {
+          hasContent = true
+        }
+      })
+      
+      // Remove row if it has cells but no content
+      if (!hasContent && cells.length > 0) {
+        console.log("🗑️ Removing empty row with", cells.length, "empty cells")
+        row.remove()
+      }
+    })
+    
+    // Get the cleaned HTML
+    htmlContent = doc.body.innerHTML
+    console.log("✅ After cleaning:", htmlContent.substring(0, 300))
 
-      const blobHtml = new Blob([finalHtml], { type: "text/html" })
-      const blobText = new Blob([text], { type: "text/plain" })
+    // STEP 3: Apply inline styles
+    htmlContent = htmlContent
+      .replace(/<strong[^>]*>/g, '<strong style="font-weight: 700; color: #0f172a;">')
+      .replace(/<em[^>]*>/g, '<em style="font-style: italic; color: #334155;">')
+      .replace(
+        /<code[^>]*>/g,
+        '<code style="background-color: #f1f5f9; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 0.9em; border: 1px solid #e2e8f0;">',
+      )
+      .replace(
+        /<ul[^>]*>/g,
+        '<ul style="margin-left: 20px; list-style-type: disc; padding-left: 20px; margin-bottom: 10px;">',
+      )
+      .replace(/<li[^>]*>/g, '<li style="margin-bottom: 4px;">')
+      .replace(
+        /<h3[^>]*>/g,
+        '<h3 style="font-size: 18px; font-weight: bold; margin-top: 15px; margin-bottom: 5px; color: #0f172a;">',
+      )
+      .replace(
+        /<h2[^>]*>/g,
+        '<h2 style="font-size: 22px; font-weight: bold; border-bottom: 2px solid #e2e8f0; margin-top: 20px; margin-bottom: 10px; color: #0f172a;">',
+      )
+      .replace(
+        /<table[^>]*>/g,
+        '<table style="border-collapse: collapse; width: 100%; border: 1px solid #cbd5e1; font-family: sans-serif; font-size: 14px; margin: 10px 0;">',
+      )
+      .replace(/<thead[^>]*>/g, '<thead style="background-color: #f1f5f9;">')
+      .replace(
+        /<th[^>]*>/g,
+        '<th style="border: 1px solid #94a3b8; padding: 10px; text-align: left; font-weight: bold; background-color: #f1f5f9; color: #0f172a;">',
+      )
+      .replace(/<td[^>]*>/g, '<td style="border: 1px solid #cbd5e1; padding: 8px; color: #334155;">')
+      .replace(/<tr[^>]*>/g, '<tr>')
 
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": blobHtml,
-          "text/plain": blobText,
-        }),
-      ])
+    const finalHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family: sans-serif; color: #0f172a; line-height: 1.6;">
+        ${htmlContent}
+      </body>
+      </html>
+    `
 
-      setCopiedMessageIndex(index)
-      setTimeout(() => setCopiedMessageIndex(null), 2000)
-    } catch (err) {
-      console.error("Rich copy failed", err)
-      navigator.clipboard.writeText(text)
-      setCopiedMessageIndex(index)
-      setTimeout(() => setCopiedMessageIndex(null), 2000)
-    }
+    const blobHtml = new Blob([finalHtml], { type: "text/html" })
+    const blobText = new Blob([text], { type: "text/plain" })
+
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": blobHtml,
+        "text/plain": blobText,
+      }),
+    ])
+
+    console.log("✅ Copy completed successfully!")
+    setCopiedMessageIndex(index)
+    setTimeout(() => setCopiedMessageIndex(null), 2000)
+  } catch (err) {
+    console.error("❌ Rich copy failed:", err)
+    navigator.clipboard.writeText(text)
+    setCopiedMessageIndex(index)
+    setTimeout(() => setCopiedMessageIndex(null), 2000)
   }
+}
 
   return (
     <>
@@ -1455,10 +1498,14 @@ In alternativa, preferisci una consulenza completa per sviluppare un sales plan 
                   className={`flex gap-3 md:gap-4 ${msg.sender === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
                 >
                   {msg.sender === "ai" && (
-                    <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-sky-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-sky-500/30 shrink-0 border-2 border-white dark:border-slate-900">
-                      <BrainCircuit size={18} className="text-white" />
-                    </div>
-                  )}
+  <div className="w-9 h-9 md:w-10 md:h-10 rounded-full shadow-lg shadow-sky-500/30 shrink-0 border-2 border-white dark:border-slate-900 overflow-hidden">
+    <img 
+      src={currentAgent.image || "https://www.ai-scaleup.com/wp-content/uploads/2025/02/Tony-AI-strategiest.png"}
+      alt={currentAgent.name}
+      className="w-full h-full object-cover"
+    />
+  </div>
+)}
                   <div
                     className={`group relative max-w-[85%] md:max-w-3xl rounded-2xl px-4 md:px-5 py-3 md:py-4 shadow-lg transition-all duration-300 hover:shadow-xl ${msg.sender === "ai" ? "bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700" : "bg-gradient-to-br from-sky-500 to-sky-600 text-white border border-sky-400"}`}
                   >
@@ -1488,10 +1535,14 @@ In alternativa, preferisci una consulenza completa per sviluppare un sales plan 
                     </div>
                   </div>
                   {msg.sender === "user" && (
-                    <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center shadow-lg shadow-slate-500/30 shrink-0 border-2 border-white dark:border-slate-900">
-                      <User size={18} className="text-sky-200" />
-                    </div>
-                  )}
+  <div className="w-9 h-9 md:w-10 md:h-10 rounded-full shadow-lg shadow-slate-500/30 shrink-0 border-2 border-white dark:border-slate-900 overflow-hidden">
+    <img 
+      src="https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
+      alt="User"
+      className="w-full h-full object-cover"
+    />
+  </div>
+)}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -1561,3 +1612,5 @@ In alternativa, preferisci una consulenza completa per sviluppare un sales plan 
     </>
   )
 }
+
+
