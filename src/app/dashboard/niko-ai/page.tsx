@@ -276,6 +276,8 @@ const AI_TEAM_LIST = [
   { id: "alex-ai" },
   { id: "aladino-ai" },
   { id: "jim-ai" },
+{ id: "daniele-ai" },
+
 ]
 
 // --- MOCK USER BUTTON ---
