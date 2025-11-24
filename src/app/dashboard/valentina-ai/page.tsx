@@ -268,7 +268,7 @@ const AGENTS_DB: Record<string, any> = {
 // --- AGENT ROSTER LIST ---
 const AI_TEAM_LIST = [
   { id: "mike-ai" },
-  { id: "valentina-ai" },
+  { id: "tony-ai" },
   { id: "lara-ai" },
   { id: "simone-ai" },
   { id: "niko-ai" },
