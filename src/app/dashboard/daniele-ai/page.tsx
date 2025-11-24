@@ -5,8 +5,8 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { UserButton } from "@clerk/nextjs"
-import { Home } from 'lucide-react'
-import { marked } from 'marked'
+import { Home } from "lucide-react"
+import { marked } from "marked"
 
 interface Message {
   text: string
@@ -21,6 +21,7 @@ interface Chat {
 }
 
 export default function DanieleAIPage() {
+  const [mounted, setMounted] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -36,6 +37,12 @@ export default function DanieleAIPage() {
     "https://n8n-c2lq.onrender.com/webhook/b53858eb-1e73-4798-80ae-13c0d3323f1a/chat?action=sendMessage"
 
   useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
     const generateUUID = () => {
       return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
         const r = (Math.random() * 16) | 0
@@ -76,7 +83,7 @@ export default function DanieleAIPage() {
 
     const storedSidebarVisible = localStorage.getItem("daniele-ai-sidebar-visible")
     setSidebarVisible(storedSidebarVisible !== "false")
-  }, [])
+  }, [mounted])
 
   const createInitialMessage = () => {
     const initialMessage: Message = {
@@ -154,7 +161,7 @@ export default function DanieleAIPage() {
   }
 
   const formatMessageText = (text: string) => {
-    if (!text) return ''
+    if (!text) return ""
 
     // Detect if text contains a markdown table
     const hasTable = /\|.*\|.*\n\s*\|[\s\-:]+\|/m.test(text)
@@ -164,7 +171,7 @@ export default function DanieleAIPage() {
       try {
         marked.setOptions({
           gfm: true,
-          breaks: true
+          breaks: true,
         })
         return marked.parse(text) as string
       } catch (e) {
@@ -181,7 +188,7 @@ export default function DanieleAIPage() {
       '<code style="background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>',
     )
     formatted = formatted.replace(
-      /\[([^\]]+?)\]\((https?:\/\/[^\s)]+)\)/g,
+      /\[([^\]]+?)\]$$(https?:\/\/[^\s)]+)$$/g,
       '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #235E84; text-decoration: underline;">$1</a>',
     )
     formatted = formatted.replace(/\n/g, "<br>")
@@ -368,6 +375,10 @@ export default function DanieleAIPage() {
   const sortedChats = (Object.entries(chats) as [string, Chat][]).sort(
     ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
   )
+
+  if (!mounted) {
+    return null
+  }
 
   return (
     <>
@@ -917,7 +928,7 @@ export default function DanieleAIPage() {
                     }}
                   >
                     <img
-                      src={agent.img}
+                      src={agent.img || "/placeholder.svg"}
                       alt={agent.name}
                       style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     />
@@ -1222,8 +1233,3 @@ export default function DanieleAIPage() {
     </>
   )
 }
-
-
-
-
-
