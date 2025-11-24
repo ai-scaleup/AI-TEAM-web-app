@@ -263,6 +263,15 @@ const AGENTS_DB: Record<string, any> = {
     accentColor: "#fb923c",
     route: "/dashboard/jim-ai",
   },
+"daniele-ai": {
+    name: "Daniele AI",
+    role: "Response Copywriter",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
+    description: "Progetto e scrivo copy di direct response per trasformare traffico qualificato in lead e clienti paganti.",
+    primaryColor: "#f97316",
+    accentColor: "#fb923c",
+    route: "/dashboard/daniele-ai",
+  },
 }
 
 // --- AGENT ROSTER LIST ---
