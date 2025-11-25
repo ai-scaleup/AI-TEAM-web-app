@@ -263,6 +263,15 @@ const AGENTS_DB: Record<string, any> = {
     accentColor: "#fb923c",
     route: "/dashboard/jim-ai",
   },
+"daniele-ai": {
+    name: "Daniele AI",
+    role: "Response Copywriter",
+    image: "https://www.ai-scaleup.com/wp-content/uploads/2025/11/daniele_ai_direct_response_copywriter.png",
+    description: "Progetto e scrivo copy di direct response per trasformare traffico qualificato in lead e clienti paganti.",
+    primaryColor: "#f97316",
+    accentColor: "#fb923c",
+    route: "/dashboard/daniele-ai",
+  },
 }
 
 // --- AGENT ROSTER LIST ---
@@ -276,6 +285,7 @@ const AI_TEAM_LIST = [
   { id: "alex-ai" },
   { id: "aladino-ai" },
   { id: "jim-ai" },
+{ id: "daniele-ai" },
 ]
 
 // --- MOCK USER BUTTON ---
@@ -326,7 +336,7 @@ export default function App() {
   const CURRENT_NAMESPACE = useRef("")
 
   const N8N_ENDPOINT =
-    "https://n8n-c2lq.onrender.com/webhook/0c898053-01f4-494d-b013-165c8a9023d1/chat?action=sendMessage"
+    "https://n8n-c2lq.onrender.com/webhook/53b24a5e-80c2-4a41-8755-59f37ba751dc/chat?action=sendMessage"
 
   // --- INITIALIZATION ---
   useEffect(() => {
