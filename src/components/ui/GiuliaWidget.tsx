@@ -654,7 +654,7 @@ export default function GiuliaWidget() {
               <span>Offline</span>
             </div>
             <div className="giulia-chat-input-wrapper">
-              <input type="text" className="giulia-chat-input" placeholder="Scrivi un comando..." ref={chatInputRef} />
+              <input type="text" className="giulia-chat-input" placeholder="Come posso esserti utile?" ref={chatInputRef} />
               <button className="giulia-send-btn" ref={sendBtnRef}>
                 <svg viewBox="0 0 24 24">
                   <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
