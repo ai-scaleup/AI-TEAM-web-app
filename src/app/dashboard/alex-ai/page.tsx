@@ -1,4 +1,6 @@
 "use client"
+export const dynamic = "force-dynamic"
+export const runtime = "edge"
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
@@ -33,6 +35,26 @@ import {
   Menu,
   Home,
 } from "lucide-react"
+import * as pdfjsLib from "pdfjs-dist"
+import mammoth from "mammoth"
+import * as XLSX from "xlsx"
+
+// --- Pinecone Vector Type Definition ---
+// This type definition is added to resolve the 'PineconeVector is undeclared' error.
+interface PineconeVector {
+  id: string
+  values: number[]
+  metadata: Record<string, any>
+}
+
+if (typeof window !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+}
+
+// Removed Pinecone initialization, assuming it's handled via environment variables in fetch calls
+// const pinecone = new Pinecone({
+//   apiKey: process.env.NEXT_PUBLIC_PINECONE_API_KEY || "",
+// })
 
 // --- TYPES ---
 interface Message {
@@ -51,7 +73,7 @@ interface ChatSession {
   folderId: string | null
   archived: boolean
   agentId: string
-  sessionId?: string // Added sessionId to track n8n conversation history per chat
+  sessionId?: string
 }
 
 interface FolderType {
@@ -63,6 +85,249 @@ interface FolderType {
 // --- CONSTANTS ---
 const USER_AVATAR =
   "https://www.shutterstock.com/image-vector/vector-flat-illustration-grayscale-avatar-600nw-2264922221.jpg"
+
+// --- FILE EXTRACTION FUNCTIONS ---
+async function extractFileContent(file: File): Promise<string> {
+  const fileType = file.type
+  const fileName = file.name.toLowerCase()
+
+  try {
+    if (fileType === "application/pdf" || fileName.endsWith(".pdf")) {
+      const arrayBuffer = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+      let text = ""
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const content = await page.getTextContent()
+        const pageText = content.items.map((item: any) => item.str).join(" ")
+        text += pageText + "\n"
+      }
+      return text.trim()
+    }
+
+    if (
+      fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      fileName.endsWith(".docx")
+    ) {
+      const arrayBuffer = await file.arrayBuffer()
+      const result = await mammoth.extractRawText({ arrayBuffer })
+      return result.value.trim()
+    }
+
+    if (
+      fileType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+      fileType === "application/vnd.ms-excel" ||
+      fileName.endsWith(".xlsx") ||
+      fileName.endsWith(".xls")
+    ) {
+      const arrayBuffer = await file.arrayBuffer()
+      const workbook = XLSX.read(arrayBuffer, { type: "array" })
+      let text = ""
+      workbook.SheetNames.forEach((sheetName) => {
+        const sheet = workbook.Sheets[sheetName]
+        const csv = XLSX.utils.sheet_to_csv(sheet)
+        text += `Sheet: ${sheetName}\n${csv}\n\n`
+      })
+      return text.trim()
+    }
+
+    if (fileType === "text/csv" || fileName.endsWith(".csv")) {
+      return await file.text()
+    }
+
+    if (fileType === "application/json" || fileName.endsWith(".json")) {
+      const text = await file.text()
+      try {
+        const json = JSON.parse(text)
+        return JSON.stringify(json, null, 2)
+      } catch {
+        return text
+      }
+    }
+
+    if (fileType === "text/html" || fileName.endsWith(".html") || fileName.endsWith(".htm")) {
+      const text = await file.text()
+      const div = document.createElement("div")
+      div.innerHTML = text
+      return div.textContent || div.innerText || text
+    }
+
+    if (fileType === "text/markdown" || fileName.endsWith(".md")) {
+      return await file.text()
+    }
+
+    if (
+      fileType.startsWith("text/") ||
+      fileName.endsWith(".txt") ||
+      fileName.endsWith(".js") ||
+      fileName.endsWith(".ts") ||
+      fileName.endsWith(".jsx") ||
+      fileName.endsWith(".tsx") ||
+      fileName.endsWith(".py") ||
+      fileName.endsWith(".java") ||
+      fileName.endsWith(".c") ||
+      fileName.endsWith(".cpp") ||
+      fileName.endsWith(".css") ||
+      fileName.endsWith(".scss") ||
+      fileName.endsWith(".sql") ||
+      fileName.endsWith(".xml") ||
+      fileName.endsWith(".yaml") ||
+      fileName.endsWith(".yml")
+    ) {
+      return await file.text()
+    }
+
+    if (fileType.startsWith("image/")) {
+      return `[Image file: ${file.name}, Type: ${fileType}, Size: ${(file.size / 1024).toFixed(2)} KB]`
+    }
+
+    if (fileType.startsWith("audio/")) {
+      return `[Audio file: ${file.name}, Type: ${fileType}, Size: ${(file.size / 1024).toFixed(2)} KB]`
+    }
+
+    if (fileType.startsWith("video/")) {
+      return `[Video file: ${file.name}, Type: ${fileType}, Size: ${(file.size / 1024).toFixed(2)} KB]`
+    }
+
+    try {
+      return await file.text()
+    } catch {
+      return `[Binary file: ${file.name}, Type: ${fileType}, Size: ${(file.size / 1024).toFixed(2)} KB]`
+    }
+  } catch (error) {
+    console.error(`Error extracting content from ${file.name}:`, error)
+    return `[Error extracting content from ${file.name}: ${error instanceof Error ? error.message : String(error)}]`
+  }
+}
+
+// --- PINECONE HELPER FUNCTIONS ---
+async function getEmbedding(text: string): Promise<number[]> {
+  const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY
+  const model = process.env.NEXT_PUBLIC_OPENAI_MODEL || "text-embedding-ada-002"
+
+  if (!apiKey) {
+    throw new Error("OpenAI API key not configured")
+  }
+
+  const response = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      input: text,
+      model: model,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to get embedding: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return data.data[0].embedding
+}
+
+async function upsertToPinecone(vectors: PineconeVector[], namespace: string): Promise<boolean> {
+  const pineconeHost = process.env.NEXT_PUBLIC_PINECONE_HOST
+  const pineconeApiKey = process.env.NEXT_PUBLIC_PINECONE_API_KEY
+
+  if (!pineconeHost || !pineconeApiKey) {
+    throw new Error("Pinecone not configured")
+  }
+
+  const url = `${pineconeHost}/vectors/upsert`
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Api-Key": pineconeApiKey,
+    },
+    body: JSON.stringify({
+      vectors: vectors,
+      namespace: namespace,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to upsert to Pinecone: ${response.status}`)
+  }
+
+  return true
+}
+
+async function upsertFileToPinecone(
+  fileName: string,
+  content: string,
+  namespace: string,
+  chatId?: string,
+  agentId?: string,
+): Promise<void> {
+  console.log("[v0] Starting Pinecone upsert for file:", fileName)
+  console.log("[v0] Namespace:", namespace)
+  console.log("[v0] Content length:", content.length)
+
+  const timestamp = Date.now()
+  const cleanFileName = fileName.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase()
+
+  const maxChunkSize = 8000
+  const chunks: string[] = []
+
+  if (content.length <= maxChunkSize) {
+    chunks.push(content)
+  } else {
+    const paragraphs = content.split(/\n\n+/)
+    let currentChunk = ""
+
+    for (const para of paragraphs) {
+      if (currentChunk.length + para.length > maxChunkSize) {
+        if (currentChunk) chunks.push(currentChunk.trim())
+        currentChunk = para
+      } else {
+        currentChunk += (currentChunk ? "\n\n" : "") + para
+      }
+    }
+    if (currentChunk) chunks.push(currentChunk.trim())
+  }
+
+  console.log("[v0] File split into", chunks.length, "chunks")
+
+  const vectors: PineconeVector[] = []
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i]
+    console.log("[v0] Getting embedding for chunk", i + 1, "of", chunks.length)
+    const embedding = await getEmbedding(chunk)
+
+    const vectorId =
+      chunks.length === 1 ? `file_${cleanFileName}_${timestamp}` : `file_${cleanFileName}_${timestamp}_part${i + 1}`
+
+    vectors.push({
+      id: vectorId,
+      values: embedding,
+      metadata: {
+        text: chunk,
+        sender: "file",
+        timestamp: new Date().toISOString(),
+        chatId: chatId || "",
+        agentId: agentId || "",
+        namespace: namespace,
+        fileName: fileName,
+        fileType: fileName.split(".").pop() || "unknown",
+        chunkIndex: i,
+        totalChunks: chunks.length,
+      },
+    })
+  }
+
+  console.log("[v0] Upserting", vectors.length, "vectors to Pinecone namespace:", namespace)
+  await upsertToPinecone(vectors, namespace)
+  console.log("[v0] Successfully upserted file to Pinecone:", fileName)
+}
 
 // --- ROBUST MARKDOWN SHIM v4 ---
 const simpleMarkdown = {
@@ -119,7 +384,6 @@ const simpleMarkdown = {
         const rowCols = tableBuffer[i].split("|")
         const rowCells = rowCols.map((c) => c.trim()).filter(Boolean)
 
-        // Only add row if it has actual content
         if (rowCells.length > 0 && rowCells.some((cell) => cell.length > 0)) {
           html +=
             '<tr class="border-b border-slate-200 dark:border-white/5 last:border-0 hover:bg-slate-100/50 dark:hover:bg-white/5">'
@@ -129,8 +393,8 @@ const simpleMarkdown = {
           html += "</tr>"
         }
       }
-      html += "</tbody></table></div>"
 
+      html += "</tbody></table></div>"
       output += html
       tableBuffer = []
     }
@@ -146,6 +410,7 @@ const simpleMarkdown = {
         tableBuffer.push(line)
         continue
       }
+
       flushTable()
 
       if (line.match(/^[-*]\s/)) {
@@ -305,7 +570,6 @@ export default function App() {
   const currentAgent = AGENTS_DB[activeAgentId] || AGENTS_DB["alex-ai"]
 
   const [messages, setMessages] = useState<Message[]>([])
-
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [sidebarVisible, setSidebarVisible] = useState(true)
@@ -330,6 +594,8 @@ export default function App() {
   const [showArchived, setShowArchived] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
 
+  const [pendingFileContents, setPendingFileContents] = useState<{ fileName: string; content: string }[]>([])
+
   // --- REFS ---
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -342,6 +608,8 @@ export default function App() {
 
   // --- INITIALIZATION ---
   useEffect(() => {
+    if (typeof window === "undefined") return
+
     const savedTheme = localStorage.getItem("theme")
     if (savedTheme) setIsDark(savedTheme === "dark")
     else setIsDark(true)
@@ -369,6 +637,7 @@ export default function App() {
       try {
         const parsedChats = JSON.parse(savedChats) as Record<string, ChatSession>
         setChats(parsedChats)
+
         if (Object.keys(parsedChats).length > 0) {
           const sorted = Object.entries(parsedChats).sort(
             ([, a], [, b]) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
@@ -376,6 +645,7 @@ export default function App() {
           const recentChatId = sorted[0][0]
           setCurrentChatId(recentChatId)
           setMessages(parsedChats[recentChatId].messages || [])
+
           if (parsedChats[recentChatId].agentId) {
             setActiveAgentId(parsedChats[recentChatId].agentId)
           }
@@ -401,6 +671,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === "undefined") return
     if (isDark) {
       document.documentElement.classList.add("dark")
       localStorage.setItem("theme", "dark")
@@ -463,7 +734,7 @@ export default function App() {
         folderId: null,
         archived: false,
         agentId: targetAgentId,
-        sessionId: newSessionId, // Store sessionId with the chat
+        sessionId: newSessionId,
       }
       const newChats = { [newChatId]: newChat, ...prev }
       localStorage.setItem("alex-ai-chats", JSON.stringify(newChats))
@@ -490,31 +761,37 @@ export default function App() {
 
   const loadChat = (chatId: string) => {
     if (!chats[chatId]) return
+
     setCurrentChatId(chatId)
     setMessages(chats[chatId].messages || [])
+
     if (chats[chatId].agentId && chats[chatId].agentId !== activeAgentId) {
       setActiveAgentId(chats[chatId].agentId)
     }
+
     setActiveMenu(null)
+
     if (window.innerWidth < 768) {
       setSidebarVisible(false)
     }
   }
 
-  // --- FOLDER LOGIC ---
   const confirmCreateFolder = () => {
     if (!newFolderName.trim()) {
       setIsCreatingFolder(false)
       return
     }
+
     const newFolder: FolderType = {
       id: `folder_${Date.now()}`,
       name: newFolderName,
       createdAt: new Date().toISOString(),
     }
+
     const updatedFolders = [...folders, newFolder]
     setFolders(updatedFolders)
     localStorage.setItem("alex-ai-folders", JSON.stringify(updatedFolders))
+
     setExpandedFolders((prev) => new Set(prev).add(newFolder.id))
     setIsCreatingFolder(false)
     setNewFolderName("")
@@ -549,6 +826,7 @@ export default function App() {
         updatedChats[key].folderId = null
       }
     })
+
     setChats(updatedChats)
     localStorage.setItem("alex-ai-chats", JSON.stringify(updatedChats))
 
@@ -557,7 +835,6 @@ export default function App() {
     localStorage.setItem("alex-ai-folders", JSON.stringify(updatedFolders))
   }
 
-  // --- CONTEXT MENU ACTIONS ---
   const deleteChat = (chatIdToDelete: string, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault()
@@ -573,11 +850,13 @@ export default function App() {
     if (!updatedChats[chatIdToDelete]) return
 
     delete updatedChats[chatIdToDelete]
+
     const remainingIds = Object.keys(updatedChats)
 
     if (remainingIds.length === 0) {
       const agent = AGENTS_DB[activeAgentId]
       const newChatId = "chat_" + Date.now()
+
       const welcomeMsg: Message = {
         text: `Ciao! Sono **${agent.name}**. ${agent.description} Come posso aiutarti?`,
         sender: "ai",
@@ -641,12 +920,12 @@ export default function App() {
       setRenamingChat(null)
       return
     }
+
     updateChatState(chatId, { title: renameValue.trim() })
     setRenamingChat(null)
     setRenameValue("")
   }
 
-  // --- DRAG & DROP LOGIC ---
   const handleDragStart = (e: React.DragEvent, chatId: string) => {
     e.dataTransfer.setData("chatId", chatId)
     setDraggedChatId(chatId)
@@ -660,8 +939,10 @@ export default function App() {
   const handleDrop = (e: React.DragEvent, targetFolderId: string | null) => {
     e.preventDefault()
     setDragOverFolderId(null)
+
     const chatId = e.dataTransfer.getData("chatId")
     if (!chatId || !chats[chatId]) return
+
     if (chats[chatId].folderId === targetFolderId) return
 
     updateChatState(chatId, { folderId: targetFolderId })
@@ -669,10 +950,10 @@ export default function App() {
     if (targetFolderId) {
       setExpandedFolders((prev) => new Set(prev).add(targetFolderId))
     }
+
     setDraggedChatId(null)
   }
 
-  // --- MESSAGING ---
   const formatMessageText = (text: string) => {
     if (!text) return ""
     try {
@@ -682,7 +963,6 @@ export default function App() {
     }
   }
 
-  // --- Message Sending Logic ---
   const sendMessage = async () => {
     if (!inputValue.trim() && selectedFiles.length === 0) return
 
@@ -696,18 +976,19 @@ export default function App() {
     }
 
     let currentMessages = [...messages, userMessage]
-
-    // Handle creating a new chat if none is active
     let currentChatIdForSend = currentChatId
+
     if (!currentChatIdForSend) {
       const newChatId = "chat_" + Date.now()
       const newSessionId = "session_" + Date.now() + "_" + Math.random().toString(36).substring(2, 9)
       const agent = AGENTS_DB[activeAgentId]
+
       const welcomeMsg: Message = {
         text: `Ciao! Sono **${agent.name}**. ${agent.description} Come posso aiutarti?`,
         sender: "ai",
         time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
       }
+
       const newChat: ChatSession = {
         id: newChatId,
         title: `Missione con ${agent.name}`,
@@ -716,7 +997,7 @@ export default function App() {
         folderId: null,
         archived: false,
         agentId: activeAgentId,
-        sessionId: newSessionId, // Store sessionId with the new chat
+        sessionId: newSessionId,
       }
 
       const updatedChatsState = { ...chats, [newChatId]: newChat }
@@ -727,20 +1008,39 @@ export default function App() {
       setMessages(currentMessages)
       localStorage.setItem("alex-ai-chats", JSON.stringify(updatedChatsState))
     } else {
-      // Add user message to existing chat
       const updatedChatSession = {
         ...chats[currentChatIdForSend],
         messages: currentMessages,
         lastUpdated: new Date().toISOString(),
         title: chats[currentChatIdForSend]?.title || inputValue.slice(0, 30) || "Nuova Missione",
       }
+
       const updatedChatsState = { ...chats, [currentChatIdForSend]: updatedChatSession }
       setChats(updatedChatsState)
       setMessages(currentMessages)
       localStorage.setItem("alex-ai-chats", JSON.stringify(updatedChatsState))
     }
 
-    // Add a placeholder for the AI's response
+    // Upsert pending file contents to Pinecone on send
+    if (pendingFileContents.length > 0 && CURRENT_NAMESPACE.current) {
+      for (const fileData of pendingFileContents) {
+        try {
+          console.log("[v0] Uploading file:", fileData.fileName)
+          await upsertFileToPinecone(
+            fileData.fileName,
+            fileData.content,
+            CURRENT_NAMESPACE.current,
+            currentChatIdForSend || undefined,
+            activeAgentId,
+          )
+          console.log("[v0] Successfully uploaded:", fileData.fileName)
+        } catch (error) {
+          console.error("[v0] Failed to upsert file to Pinecone:", fileData.fileName, error)
+        }
+      }
+      setPendingFileContents([])
+    }
+
     const aiResponsePlaceholder: Message = { text: "...", sender: "ai", time: "", raw: "" }
     setMessages((prev) => [...prev, aiResponsePlaceholder])
 
@@ -764,9 +1064,13 @@ export default function App() {
         body: JSON.stringify({
           chatInput:
             inputValue + (selectedFiles.length ? ` [Attached: ${selectedFiles.map((f) => f.name).join(", ")}]` : ""),
-          sessionId: sessionId, // Use chat-specific sessionId for conversation continuity
+          sessionId: sessionId,
           useMemory: useMemory,
-          metadata: { namespace: CURRENT_NAMESPACE.current, source: activeAgentId },
+          metadata: {
+            namespace: CURRENT_NAMESPACE.current,
+            source: activeAgentId,
+            files: pendingFileContents.map((f) => ({ name: f.fileName, size: f.content.length })),
+          },
           chatId: currentChatIdForSend,
         }),
       })
@@ -783,14 +1087,15 @@ export default function App() {
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
-        buffer += decoder.decode(value, { stream: true })
 
+        buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split(/\r?\n/)
         buffer = lines.pop() || ""
 
         for (const line of lines) {
           const trimmed = line.replace(/^data:\s?/, "").trim()
           if (!trimmed) continue
+
           try {
             const obj = JSON.parse(trimmed)
             if (obj.type === "item" && typeof obj.content === "string") {
@@ -800,6 +1105,7 @@ export default function App() {
               } else {
                 rawText += obj.content
               }
+
               setMessages((prev) => {
                 const newMsgs = [...prev]
                 newMsgs[newMsgs.length - 1].text = rawText
@@ -814,7 +1120,6 @@ export default function App() {
         }
       }
 
-      // Finalize AI message
       const finalAiMessage: Message = {
         text: rawText.trim() || "La risposta è stata completata.",
         sender: "ai",
@@ -825,39 +1130,68 @@ export default function App() {
       setMessages((prev) => {
         const newMsgs = [...prev]
         newMsgs[newMsgs.length - 1] = finalAiMessage
-        // Update the chat in state and localStorage
+
         const updatedChatSession = {
           ...chats[currentChatIdForSend!],
           messages: newMsgs,
           lastUpdated: new Date().toISOString(),
         }
+
         const updatedChatsState = { ...chats, [currentChatIdForSend!]: updatedChatSession }
         localStorage.setItem("alex-ai-chats", JSON.stringify(updatedChatsState))
         setChats(updatedChatsState)
+
         return newMsgs
       })
+
+      setInputValue("")
+      setSelectedFiles([])
+      setPendingFileContents([])
+      if (fileInputRef.current) fileInputRef.current.value = ""
     } catch (error) {
       console.error("Error sending message:", error)
       setMessages((prev) => {
-        const newMsgs = [...prev]
-        newMsgs[newMsgs.length - 1].text =
-          `Errore: Impossibile inviare il messaggio. ${error instanceof Error ? error.message : String(error)}`
-        return newMsgs
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          text: "Si è verificato un errore. Riprova.",
+          sender: "ai",
+          time: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+          raw: "",
+        }
+        return updated
       })
     } finally {
       setIsLoading(false)
-      setInputValue("")
-      setSelectedFiles([])
     }
   }
 
   const handleAttachment = () => fileInputRef.current?.click()
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.length) setSelectedFiles((prev) => [...prev, ...Array.from(e.target.files!)])
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.length) {
+      const newFiles = Array.from(e.target.files)
+      setSelectedFiles((prev) => [...prev, ...newFiles])
+
+      // Extract content from files for inclusion in the message
+      for (const file of newFiles) {
+        try {
+          console.log(`📄 Extracting content from ${file.name}...`)
+          const content = await extractFileContent(file)
+          if (content && content.trim()) {
+            setPendingFileContents((prev) => [...prev, { fileName: file.name, content }])
+            console.log(`✅ Extracted ${content.length} characters from ${file.name}`)
+          }
+        } catch (error) {
+          console.error(`❌ Failed to extract file content from ${file.name}:`, error)
+        }
+      }
+    }
   }
 
   const removeFile = (index: number) => {
+    const fileToRemove = selectedFiles[index]
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index))
+    setPendingFileContents((prev) => prev.filter((f) => f.fileName !== fileToRemove.name))
   }
 
   const handleCopyMessage = async (text: string, index: number) => {
@@ -972,22 +1306,22 @@ export default function App() {
         href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&display=swap"
         rel="stylesheet"
       />
-
       <style>{`
         :root {
             --brand-dark: #020617;
             --brand-primary: #0ea5e9;
             --font-tech: 'Rajdhani', sans-serif;
         }
+
         body { font-family: var(--font-tech); background-color: #f8fafc; color: #0f172a; overflow: hidden; }
         .dark body { background-color: var(--brand-dark); color: #f8fafc; }
-        
+
         .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.5); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05); }
-        .dark .glass-panel { background: rgba(2, 6, 23, 0.85); border: 1px solid rgba(14, 165, 233, 0.15); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
+        .dark .glass-panel { background: rgba(2, 6, 23, 0.85); border: 1px solid rgba(14,165,233,0.15); box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4); }
 
         @keyframes brain-float { 0% { transform: translateY(0px); } 50% { transform: translateY(-6px); } 100% { transform: translateY(0px); } }
         .animate-float { animation: brain-float 6s ease-in-out infinite; }
-        
+
         @keyframes brain-wave-flow { 0% { background-position: 0% 50%; opacity: 0.2; } 50% { background-position: 100% 50%; opacity: 0.5; } 100% { background-position: 0% 50%; opacity: 0.2; } }
         .brainwave-overlay { background: linear-gradient(90deg, transparent, rgba(14,165,233,0.3), transparent, rgba(34,211,238,0.3), transparent); background-size: 200% 100%; animation: brain-wave-flow 3s linear infinite; pointer-events: none; }
 
@@ -995,38 +1329,41 @@ export default function App() {
         .synapse-active { animation: synapse-pulse 1.5s ease-in-out infinite; position: relative; }
 
         @keyframes neural-grid-move { 0% { transform: translateY(0); } 100% { transform: translateY(50px); } }
-        .neural-grid-active { 
+        .neural-grid-active {
             background-image: linear-gradient(0deg, transparent 24%, rgba(14, 165, 233, 0.05) 25%, rgba(14, 165, 233, 0.05) 26%, transparent 27%, transparent 74%, rgba(14, 165, 233, 0.05) 75%, rgba(14, 165, 233, 0.05) 76%, transparent 77%, transparent), linear-gradient(90deg, transparent 24%, rgba(14, 165, 233, 0.05) 25%, rgba(14, 165, 233, 0.05) 26%, transparent 27%, transparent 74%, rgba(14, 165, 233, 0.05) 75%, rgba(14, 165, 233, 0.05) 76%, transparent 77%, transparent);
             background-size: 50px 50px;
             animation: neural-grid-move 3s linear infinite;
         }
-        
+
         @keyframes synapse-beam { 0% { opacity: 0; transform: translateY(20px) scale(0.8); } 50% { opacity: 1; transform: translateY(0) scale(1); } 100% { opacity: 0; transform: translateY(-20px) scale(1.2); } }
         .synapse-beam::before { content: ''; position: absolute; width: 100%; height: 100%; top: 0; left: 0; background: radial-gradient(circle, rgba(14,165,233,0.2) 0%, transparent 70%); animation: synapse-beam 2s infinite; pointer-events: none; z-index: -1; }
 
         .markdown-body table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 1.5em 0; border-radius: 12px; overflow: hidden; border: 1px solid rgba(148, 163, 184, 0.2); font-size: 0.95em; }
         .dark .markdown-body table { border-color: rgba(30, 41, 59, 0.8); }
+
         .markdown-body th { background-color: #f1f5f9; color: #334155; font-weight: 700; text-align: left; padding: 12px 16px; border-bottom: 2px solid rgba(148, 163, 184, 0.3); }
         .dark .markdown-body th { background-color: #1e293b; color: #cbd5e1; border-bottom-color: rgba(51, 65, 85, 0.8); }
+
         .markdown-body td { padding: 12px 16px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); }
         .dark .markdown-body td { border-bottom-color: rgba(51, 65, 85, 0.4); }
+
         .markdown-body tr:nth-child(even) { background-color: rgba(241, 245, 249, 0.4); }
         .dark .markdown-body tr:nth-child(even) { background-color: rgba(30, 41, 59, 0.3); }
-        
+
         .markdown-body p { margin-bottom: 1.25em; line-height: 1.6; }
         .markdown-body strong { font-weight: 700; color: inherit; }
         .markdown-body ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 1.25em; }
-        
+
         .btn-electric {
-           background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-           box-shadow: 0 0 15px rgba(14,165,233,0.5);
-           transition: all 0.3s ease;
+          background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+          box-shadow: 0 0 15px rgba(14,165,233,0.5);
+          transition: all 0.3s ease;
         }
         .btn-electric:hover {
-           box-shadow: 0 0 25px rgba(14,165,233,0.8);
-           transform: translateY(-1px);
+          box-shadow: 0 0 25px rgba(14,165,233,0.8);
+          transform: translateY(-1px);
         }
-        
+
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 2px; }
@@ -1037,8 +1374,8 @@ export default function App() {
       <div className={`flex h-screen w-full bg-tech-grid azure-glow-bg ${isDark ? "dark" : ""}`}>
         {/* Sidebar */}
         <div
-          className={`glass-panel flex flex-col transition-all duration-500 ease-[cubic-bezier(0,0,0.2,1)] z-40 
-                        ${sidebarVisible ? "w-80 translate-x-0" : "w-0 -translate-x-full opacity-0"} 
+          className={`glass-panel flex flex-col transition-all duration-500 ease-[cubic-bezier(0,0,0.2,1)] z-40
+                        ${sidebarVisible ? "w-80 translate-x-0" : "w-0 -translate-x-full opacity-0"}
                         fixed md:relative h-full border-r border-sky-100 dark:border-sky-900/30`}
         >
           <div className="p-6 border-b border-sky-100 dark:border-sky-900/30 bg-gradient-to-b from-white/50 to-transparent dark:from-sky-900/20">
@@ -1056,6 +1393,7 @@ export default function App() {
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-white tracking-wide font-tech">AI TEAM</h2>
               </div>
+
               <button
                 onClick={() => setSidebarVisible(false)}
                 className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 transition-colors md:hidden cursor-pointer"
@@ -1076,22 +1414,22 @@ export default function App() {
             <button
               onClick={() => setSidebarMode("chats")}
               className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer
-                    ${
-                      sidebarMode === "chats"
-                        ? "bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30"
-                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    }`}
+                   ${
+                     sidebarMode === "chats"
+                       ? "bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30"
+                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                   }`}
             >
               <LayoutGrid size={14} /> Missioni
             </button>
             <button
               onClick={() => setSidebarMode("agents")}
               className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer
-                    ${
-                      sidebarMode === "agents"
-                        ? "bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30"
-                        : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                    }`}
+                   ${
+                     sidebarMode === "agents"
+                       ? "bg-white dark:bg-slate-800 text-sky-600 dark:text-sky-400 shadow-sm border border-sky-100 dark:border-sky-600/30"
+                       : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                   }`}
             >
               <Users size={14} /> AI Team
             </button>
@@ -1145,11 +1483,11 @@ export default function App() {
                     <div
                       key={folder.id}
                       className={`rounded-xl border transition-all duration-300 overflow-hidden mb-1
-                                     ${
-                                       isDragTarget
-                                         ? "border-sky-400 bg-sky-50 dark:bg-sky-900/30 shadow-[0_0_15px_rgba(14,165,233,0.3)] scale-[1.02]"
-                                         : "border-slate-300 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900"
-                                     }`}
+                                    ${
+                                      isDragTarget
+                                        ? "border-sky-400 bg-sky-50 dark:bg-sky-900/30 shadow-[0_0_15px_rgba(14,165,233,0.3)] scale-[1.02]"
+                                        : "border-slate-300 dark:border-slate-700 bg-gradient-to-b from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900"
+                                    }`}
                       onDragOver={(e) => handleDragOver(e, folder.id)}
                       onDrop={(e) => handleDrop(e, folder.id)}
                     >
@@ -1195,6 +1533,7 @@ export default function App() {
                             )
                             .map(([id, chat]) => {
                               const isActive = id === currentChatId
+
                               return (
                                 <div
                                   key={id}
@@ -1246,11 +1585,11 @@ export default function App() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, id)}
                           className={`group relative p-3 rounded-xl cursor-pointer border transition-all duration-300
-                                         ${
-                                           isActive
-                                             ? "bg-gradient-to-r from-sky-50 to-white dark:from-sky-900/30 dark:to-slate-900/30 border-sky-200 dark:border-sky-500/50 shadow-sm border-l-4 border-l-sky-500"
-                                             : "border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:translate-x-1"
-                                         }`}
+                                        ${
+                                          isActive
+                                            ? "bg-gradient-to-r from-sky-50 to-white dark:from-sky-900/30 dark:to-slate-900/30 border-sky-200 dark:border-sky-500/50 shadow-sm border-l-4 border-l-sky-500"
+                                            : "border-transparent hover:bg-white/60 dark:hover:bg-white/5 hover:translate-x-1"
+                                        }`}
                         >
                           {renamingChat === id ? (
                             <div className="flex items-center gap-2">
@@ -1301,7 +1640,7 @@ export default function App() {
                                     e.stopPropagation()
                                     setActiveMenu(isMenuOpen ? null : id)
                                   }}
-                                  className={`p-1.5 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-100 dark:hover:bg-white/10 transition-all ${isMenuOpen ? "bg-sky-100 dark:bg-white/10 text-sky-500" : "opacity-0 group-hover:opacity-100"}`}
+                                  className={`p-1.5 rounded-md text-slate-400 hover:text-sky-500 hover:bg-sky-100 dark:hover:bg-white/10 transition ${isMenuOpen ? "bg-sky-100 dark:bg-white/10 text-sky-500" : "opacity-0 group-hover:opacity-100"}`}
                                 >
                                   <MoreHorizontal size={16} />
                                 </button>
@@ -1367,6 +1706,7 @@ export default function App() {
               <div className="space-y-2 animate-in fade-in duration-300 px-1">
                 {AI_TEAM_LIST.map((agentItem, idx) => {
                   const agentData = AGENTS_DB[agentItem.id] || {}
+
                   return (
                     <div
                       key={idx}
@@ -1435,6 +1775,7 @@ export default function App() {
               className={`w-full max-w-6xl mx-auto rounded-2xl p-1 shadow-2xl transition-all duration-500 animate-float overflow-hidden relative ${isDark ? "bg-slate-800/95 border border-sky-500/30 shadow-[0_0_50px_rgba(14,165,233,0.15)]" : "bg-sky-100/90 border border-sky-300 shadow-[0_10px_40px_rgba(14,165,233,0.25)]"} backdrop-blur-xl`}
             >
               <div className="absolute inset-0 pointer-events-none opacity-40 brainwave-overlay"></div>
+
               <div className="relative flex items-center justify-between p-3 md:p-4 rounded-xl z-10">
                 <div className="flex items-center gap-4 md:gap-6">
                   <button
@@ -1443,6 +1784,7 @@ export default function App() {
                   >
                     <Menu size={24} strokeWidth={3} />
                   </button>
+
                   <button
                     onClick={() => setSidebarVisible(!sidebarVisible)}
                     className="p-3 rounded-xl bg-sky-500 text-white shadow-lg shadow-sky-500/40 hover:scale-110 hover:shadow-sky-500/60 transition-all active:scale-95 border-t border-white/20 hidden md:flex items-center justify-center cursor-pointer"
@@ -1461,6 +1803,7 @@ export default function App() {
                       />
                       <div className="absolute inset-0 bg-sky-500/10 mix-blend-overlay"></div>
                     </div>
+
                     <div>
                       <div className="flex items-center gap-3 mb-1">
                         <h1 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-widest leading-none drop-shadow-md">
@@ -1492,13 +1835,16 @@ export default function App() {
                   >
                     {isDark ? <Sun size={20} /> : <Moon size={20} />}
                   </button>
+
                   <div className="h-8 w-px bg-slate-300 dark:bg-white/10 mx-2 hidden sm:block"></div>
+
                   <a
                     href="/dashboard"
                     className="p-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all border-t border-white/20 flex items-center justify-center group cursor-pointer"
                   >
                     <Home size={22} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" />
                   </a>
+
                   <div className="hidden sm:block">
                     <MockUserButton />
                   </div>
@@ -1520,13 +1866,27 @@ export default function App() {
                       <img
                         src={
                           currentAgent.image ||
-                          "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png"
+                          "https://www.ai-scaleup.com/wp-content/uploads/2025/03/David-AI-Ai-Specialist-social-ads.png" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg" ||
+                          "/placeholder.svg"
                         }
                         alt={currentAgent.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
                   )}
+
                   <div
                     className={`group relative max-w-[85%] md:max-w-3xl rounded-2xl px-4 md:px-5 py-3 md:py-4 shadow-lg transition-all duration-300 hover:shadow-xl ${msg.sender === "ai" ? "bg-white dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700" : "bg-gradient-to-br from-sky-500 to-sky-600 text-white border border-sky-400"}`}
                   >
@@ -1539,12 +1899,15 @@ export default function App() {
                         ))}
                       </div>
                     )}
+
                     <div
                       className="markdown-body prose prose-slate dark:prose-invert max-w-none text-sm md:text-base leading-relaxed"
                       dangerouslySetInnerHTML={{ __html: formatMessageText(msg.text) }}
                     />
+
                     <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200 dark:border-slate-700/50">
                       <span className="text-[10px] opacity-60 font-mono">{msg.time}</span>
+
                       {msg.sender === "ai" && msg.text && msg.text !== "..." && (
                         <button
                           onClick={() => handleCopyMessage(msg.text, idx)}
@@ -1555,6 +1918,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
+
                   {msg.sender === "user" && (
                     <div className="w-9 h-9 md:w-10 md:h-10 rounded-full shadow-lg shadow-slate-500/30 shrink-0 border-2 border-white dark:border-slate-900 overflow-hidden">
                       <img
@@ -1566,6 +1930,7 @@ export default function App() {
                   )}
                 </div>
               ))}
+
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -1594,6 +1959,7 @@ export default function App() {
                   ))}
                 </div>
               )}
+
               <div className="glass-panel rounded-2xl shadow-2xl border-2 border-sky-200 dark:border-sky-700/50 overflow-hidden">
                 <div className="flex items-end gap-3 p-3 md:p-4">
                   <button
@@ -1602,7 +1968,9 @@ export default function App() {
                   >
                     <Paperclip size={20} />
                   </button>
+
                   <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
+
                   <textarea
                     ref={textareaRef}
                     value={inputValue}
@@ -1618,6 +1986,7 @@ export default function App() {
                     className="flex-1 bg-transparent text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 text-sm md:text-base resize-none focus:outline-none min-h-[24px] max-h-[200px] py-2"
                     disabled={isLoading}
                   />
+
                   <button
                     onClick={sendMessage}
                     disabled={isLoading || (!inputValue.trim() && selectedFiles.length === 0)}
@@ -1634,5 +2003,3 @@ export default function App() {
     </>
   )
 }
-
-
